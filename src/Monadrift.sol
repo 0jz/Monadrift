@@ -17,6 +17,12 @@ contract Monadrift {
     uint256 public constant COLLISION_PENALTY = 0.0005 ether;
     uint16 public constant FEE_BPS = 100; // 1% service fee — thin on purpose; revenue story is race frequency (agents racing 24/7), not per-race take
     uint16 public constant BPS_DENOM = 10000;
+    // First few segments never collision-check — otherwise every public
+    // lobby's opening tick is everyone racing for the same 3(now 5) lanes
+    // simultaneously with zero room to spread out, wrecking half the field
+    // before the race has really started.
+    uint16 public constant GRACE_SEGMENTS = 3;
+    uint256 public constant LANE_COUNT = 5;
 
     enum LobbyMode {
         HUMAN_ONLY,
@@ -29,10 +35,14 @@ contract Monadrift {
         OBSTACLE,
         BOOST
     }
+    // Widened from 3 to 5 so more racers can be adjacent at once without
+    // forcing lane contention just from population density.
     enum Lane {
+        FAR_LEFT,
         LEFT,
         CENTER,
-        RIGHT
+        RIGHT,
+        FAR_RIGHT
     }
     enum RacePhase {
         LOBBY,
@@ -150,7 +160,7 @@ contract Monadrift {
 
     function correctLaneAt(uint256 seed, uint16 i) public pure returns (Lane) {
         uint256 h = uint256(keccak256(abi.encodePacked(seed, i, "lane")));
-        return Lane(h % 3);
+        return Lane(h % LANE_COUNT);
     }
 
     function isCheckpoint(uint16 segmentIndex) public pure returns (bool) {
@@ -172,25 +182,27 @@ contract Monadrift {
         uint16 nextSeg = p.position + 1;
         require(nextSeg <= SEGMENTS_TOTAL, "already finished");
 
+        bool inGracePeriod = nextSeg <= GRACE_SEGMENTS;
         bytes32 claimKey = keccak256(abi.encodePacked(nextSeg, lane));
-        address priorClaimant = laneClaims[raceId][claimKey];
 
-        if (priorClaimant != address(0) && priorClaimant != msg.sender) {
-            // collision: priorClaimant already holds this segment+lane
-            Player storage attacker = racePlayers[raceId][priorClaimant];
-            uint8 dmg = attacker.speed > 0 ? attacker.speed : 1;
-            _applyCollisionDamage(raceId, p, dmg);
+        if (!inGracePeriod) {
+            address priorClaimant = laneClaims[raceId][claimKey];
+            if (priorClaimant != address(0) && priorClaimant != msg.sender) {
+                // collision: priorClaimant already holds this segment+lane
+                Player storage attacker = racePlayers[raceId][priorClaimant];
+                uint8 dmg = attacker.speed > 0 ? attacker.speed : 1;
+                _applyCollisionDamage(raceId, p, dmg);
 
-            uint256 penalty = COLLISION_PENALTY > p.stake ? p.stake : COLLISION_PENALTY;
-            p.stake -= penalty;
-            attacker.stake += penalty;
+                uint256 penalty = COLLISION_PENALTY > p.stake ? p.stake : COLLISION_PENALTY;
+                p.stake -= penalty;
+                attacker.stake += penalty;
 
-            emit Collision(raceId, priorClaimant, msg.sender, dmg, penalty);
-            _checkBroke(raceId, p);
-            return;
+                emit Collision(raceId, priorClaimant, msg.sender, dmg, penalty);
+                _checkBroke(raceId, p);
+                return;
+            }
+            laneClaims[raceId][claimKey] = msg.sender;
         }
-
-        laneClaims[raceId][claimKey] = msg.sender;
 
         SegmentType segType = segmentAt(r.seed, nextSeg);
         bool wrongLane = false;

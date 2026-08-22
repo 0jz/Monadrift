@@ -34,7 +34,7 @@ function cleanErrorMessage(err) {
 }
 
 const PORT = process.env.PORT || 8787;
-const LANES = ["LEFT", "CENTER", "RIGHT"];
+const LANES = ["FAR_LEFT", "LEFT", "CENTER", "RIGHT", "FAR_RIGHT"]; // order must match the Lane enum in Monadrift.sol exactly
 const DUEL_MAX_PLAYERS = 2;
 
 // The funder wallet pays real (test)MON per new session — a public URL

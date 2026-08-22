@@ -243,6 +243,15 @@ async function validateActivePlayer() {
       return false;
     }
     isActivePlayer = true;
+    // Without this, the HUD sat on its placeholder "—" for every field —
+    // including stake, which made a fresh join look like it started at
+    // zero and would somehow "increase" — until your first move's WS
+    // broadcast arrived. Show the real starting values immediately.
+    myPosition = me.position;
+    el("hudPos").textContent = me.position;
+    el("hudHp").textContent = me.hp;
+    el("hudSpeed").textContent = me.speed;
+    el("hudStake").textContent = `${weiToMon(me.stake)} MON`;
     return true;
   } catch (err) {
     log(`Couldn't verify race participation: ${err.message}`);
@@ -260,6 +269,8 @@ const KEY_TO_LANE = {
   ArrowRight: "RIGHT",
   ArrowUp: "CENTER",
   ArrowDown: "CENTER",
+  1: "FAR_LEFT",
+  5: "FAR_RIGHT",
 };
 
 window.addEventListener("keydown", (evt) => {

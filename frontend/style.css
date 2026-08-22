@@ -197,16 +197,18 @@ body.race-waiting #track-wrap, body.race-waiting #hud, body.race-waiting #lanes 
 .stat-value.speed { color: var(--accent); }
 .stat-value.stake { color: var(--ok); }
 
-#lanes { display: flex; gap: 10px; background: transparent; border: none; padding: 0; margin-bottom: 14px; }
+/* 5 lanes now (widened from 3) — tighter padding/type so they still fit a phone width */
+#lanes { display: flex; gap: 6px; background: transparent; border: none; padding: 0; margin-bottom: 14px; }
 #lanes button {
-  flex: 1; padding: 22px 0; border: 1px solid var(--line);
+  flex: 1; min-width: 0; padding: 16px 2px; border: 1px solid var(--line);
   background: var(--surface); color: var(--ink); cursor: pointer;
-  font-size: 14px; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase;
-  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  font-size: 10.5px; font-weight: 600; letter-spacing: 0.01em; text-transform: uppercase;
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  white-space: nowrap;
   transition: border-color 0.1s ease, background 0.1s ease, transform 0.06s ease;
 }
-#lanes button .glyph { font-size: 20px; color: var(--accent); }
-#lanes button .key { font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--ink-dim); font-weight: 500; text-transform: none; }
+#lanes button .glyph { font-size: 16px; color: var(--accent); }
+#lanes button .key { font-family: "JetBrains Mono", monospace; font-size: 9px; color: var(--ink-dim); font-weight: 500; text-transform: none; }
 #lanes button:hover { border-color: var(--accent); }
 #lanes button:active, #lanes button.pressed {
   background: var(--accent); color: var(--accent-ink); border-color: var(--accent);
