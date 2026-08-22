@@ -215,11 +215,11 @@ contract Monadrift {
         }
 
         if (wrongLane) {
-            uint256 penalty = COLLISION_PENALTY > p.stake ? p.stake : COLLISION_PENALTY;
-            p.stake -= penalty;
-            r.pot += penalty; // penalties fund the pool that pays MOVE_REWARD below
+            // A wrong guess no longer costs stake either — same reasoning as
+            // collisions above. It still costs you the segment: no advance,
+            // speed resets to 0, so guessing blind is still worse than
+            // reading the hint, just not economically punishing.
             p.speed = 0;
-            _checkBroke(raceId, p);
             emit Moved(raceId, msg.sender, p.position, p.position, lane);
             return;
         }
@@ -253,13 +253,6 @@ contract Monadrift {
         } else {
             p.hp -= dmg;
             p.speed = 0;
-        }
-    }
-
-    function _checkBroke(uint256 raceId, Player storage p) internal {
-        if (p.stake == 0 && p.alive) {
-            p.alive = false;
-            emit Eliminated(raceId, p.addr);
         }
     }
 
