@@ -33,24 +33,24 @@ export const funder = FUNDER_PRIVATE_KEY ? new ethers.Wallet(FUNDER_PRIVATE_KEY,
 // (higher and lower values both failed inconsistently), so the real fix
 // is retrying, not a specific fee number.
 //
-// gasLimit is set explicitly for the same reason: without it, ethers
-// calls eth_estimateGas as a *separate* RPC round-trip before every write.
-// If that specific call hits a flaky/rate-limited RPC response, ethers
-// can't decode a revert reason and throws "missing revert data" — even
-// though the actual transaction might have been perfectly valid. All our
-// writes are cheap (~130k gas observed for join()); 1,000,000 is a generous
-// fixed cap, well under what a player could ever be charged for actual
-// gas used (you only pay for gas actually consumed), and it removes the
-// estimateGas call from the picture entirely. Don't set this near the
-// 32-bit max or anything huge: Monad's mempool admission reserves
-// gasLimit * maxFeePerGas against the sender's balance just to accept the
-// tx (see SESSION_FUND_AMOUNT in .env) — an oversized gasLimit forces
-// proportionally oversized session funding for no real benefit, and risks
-// exceeding the chain's actual per-block gas limit outright.
+// gasLimit is set explicitly to skip ethers' separate eth_estimateGas
+// round-trip before every write — BUT keep it TIGHT, not generous.
+// Empirically confirmed via a real receipt (2026-08-22): Monad testnet
+// charges for the ENTIRE declared gasLimit, not actual computation used —
+// gasUsed in the receipt literally echoed back our gasLimit value, and the
+// sender's balance dropped by gasLimit * effectiveGasPrice even though
+// chooseLane() is a simple storage write needing nowhere near that. This
+// is the opposite of standard Ethereum behavior (unused gas below the
+// limit is normally never charged at all). A "generous safety margin"
+// here is therefore a direct cost multiplier, not a safety net — it drained
+// a funded session wallet in a single move when this was set to 1,000,000.
+// 200,000 is ~35-50% headroom over the ~130-150k actually observed for
+// join()/chooseLane(), tight enough to avoid overpaying, loose enough to
+// not underestimate and revert.
 export const TX_OVERRIDES = {
   maxFeePerGas: ethers.parseUnits("210", "gwei"),
   maxPriorityFeePerGas: ethers.parseUnits("5", "gwei"),
-  gasLimit: 1000000n,
+  gasLimit: 200000n,
 };
 
 function contractAs(signerOrProvider) {
