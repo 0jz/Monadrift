@@ -1,13 +1,3 @@
-// No build step on purpose — this is the demo laptop's frontend, it needs
-// to just work when opened, not need a bundler installed under time pressure.
-// See PROJECT.md §8 "Local hosting for the demo".
-
-const API = location.origin; // backend serves this file too, see backend/src/index.js static mount
-const WS_BASE = API.replace(/^http/, "ws");
-
-const params = new URLSearchParams(location.search);
-const presetLobby = params.get("lobby");
-
 const el = (id) => document.getElementById(id);
 const log = (msg) => {
   const box = el("log");
@@ -15,8 +5,12 @@ const log = (msg) => {
   box.scrollTop = box.scrollHeight;
 };
 
-let raceId = presetLobby || null;
-let playerId = null;
+const { playerId, raceId } = loadSession();
+if (!playerId || !raceId) {
+  location.href = "index.html";
+}
+el("playerPill").textContent = playerId;
+
 let ws = null;
 
 const SEGMENT_COLORS = {
@@ -101,13 +95,6 @@ function drawTrack() {
   }
 }
 
-async function api(path, opts) {
-  const res = await fetch(`${API}${path}`, { headers: { "Content-Type": "application/json" }, ...opts });
-  const body = await res.json();
-  if (!res.ok) throw new Error(body.error || res.statusText);
-  return body;
-}
-
 async function revealNext() {
   const next = myPosition + 1;
   try {
@@ -139,22 +126,7 @@ function connectStream() {
   };
 }
 
-el("joinBtn").onclick = async () => {
-  playerId = el("playerId").value.trim() || `player-${Math.random().toString(36).slice(2, 6)}`;
-  const mode = el("mode").value;
-  try {
-    const result = await api("/lobby/quickmatch", { method: "POST", body: JSON.stringify({ playerId, mode }) });
-    raceId = result.raceId;
-    log(`Joined race ${raceId} as ${playerId} (${result.playerAddress})`);
-    connectStream();
-    revealNext();
-  } catch (err) {
-    log(`Join failed: ${err.message}`);
-  }
-};
-
 async function sendMove(direction, button) {
-  if (!raceId || !playerId) return log("Join a race first.");
   button?.classList.add("pressed");
   setTimeout(() => button?.classList.remove("pressed"), 120);
   try {
@@ -188,3 +160,5 @@ window.addEventListener("keydown", (evt) => {
 });
 
 resizeCanvas();
+connectStream();
+revealNext();

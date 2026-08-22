@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Monadrift — Race</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div class="shell">
+  <header>
+    <div class="brand">
+      <div class="brand-mark"></div>
+      <h1>Monadrift</h1>
+    </div>
+    <span class="net-pill" id="playerPill">—</span>
+  </header>
+
+  <div class="card" id="track-wrap">
+    <canvas id="track" width="1000" height="300"></canvas>
+  </div>
+
+  <div class="card" id="hud">
+    <div class="stat"><div class="stat-label">Position</div><div class="stat-value" id="hudPos">—</div></div>
+    <div class="stat"><div class="stat-label">HP</div><div class="stat-value hp" id="hudHp">—</div></div>
+    <div class="stat"><div class="stat-label">Speed</div><div class="stat-value speed" id="hudSpeed">—</div></div>
+    <div class="stat"><div class="stat-label">Stake</div><div class="stat-value stake" id="hudStake">—</div></div>
+    <div class="stat"><div class="stat-label">Last move</div><div class="stat-value" id="hudLatency">—</div></div>
+  </div>
+
+  <div class="card" id="lanes">
+    <button data-lane="LEFT"><span class="glyph">◀</span>Left<span class="key">←</span></button>
+    <button data-lane="CENTER"><span class="glyph">▲</span>Center<span class="key">↑ / ↓</span></button>
+    <button data-lane="RIGHT"><span class="glyph">▶</span>Right<span class="key">→</span></button>
+  </div>
+
+  <div class="card" id="log"></div>
+</div>
+
+<script src="shared.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
