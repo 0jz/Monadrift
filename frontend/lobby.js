@@ -41,7 +41,7 @@ function showWaiting() {
   el("waitingView").classList.remove("hidden");
   el("waitingTitle").textContent = lobbyType === "duel" ? "Duel lobby" : "Public lobby";
   el("waitingRaceId").textContent = raceId;
-  el("qrImage").src = `/lobby/${raceId}/qr`;
+  el("qrImage").src = `${API}/lobby/${raceId}/qr`; // must be the backend's own origin — frontend and backend are cross-origin (Vercel vs Railway)
   if (lobbyType === "public") el("startBtn").classList.remove("hidden");
   pollTimer = setInterval(pollState, 1000);
   pollState();

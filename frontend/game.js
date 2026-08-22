@@ -121,7 +121,7 @@ function connectStream() {
       el("hudPos").textContent = msg.position;
       el("hudHp").textContent = msg.hp;
       el("hudSpeed").textContent = msg.speed;
-      el("hudStake").textContent = msg.stake;
+      el("hudStake").textContent = `${weiToMon(msg.stake)} MON`;
       el("hudLatency").textContent = `${msg.latencyMs}ms`;
       revealNext();
       drawTrack();
@@ -143,6 +143,10 @@ async function sendMove(direction, button) {
     });
   } catch (err) {
     log(`Move failed: ${err.message}`);
+    // A move can fail because you're genuinely out (broke/wrecked past
+    // recovery) — re-check instead of letting every further click/keypress
+    // retry a call that can never succeed.
+    await validateActivePlayer();
   }
 }
 

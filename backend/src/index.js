@@ -26,6 +26,13 @@ app.use(express.json());
 // to reach this one process; it's the only thing that needs internet.
 app.use(express.static(path.join(__dirname, "..", "..", "frontend")));
 
+// ethers' default err.message for a contract revert is a multi-hundred-
+// character dump of the raw tx/payload — the actual human-readable reason
+// (e.g. "not active") is usually sitting in err.reason. Prefer that.
+function cleanErrorMessage(err) {
+  return err?.reason || err?.shortMessage || String(err?.message || err);
+}
+
 const PORT = process.env.PORT || 8787;
 const LANES = ["LEFT", "CENTER", "RIGHT"];
 const DUEL_MAX_PLAYERS = 2;
@@ -103,7 +110,7 @@ app.post("/session/register", registerLimiter, async (req, res) => {
     res.json({ playerId, address: wallet.address });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: String(err.message || err) });
+    res.status(500).json({ error: cleanErrorMessage(err) });
   }
 });
 
@@ -130,7 +137,7 @@ app.post("/lobby/create", async (req, res) => {
     res.json({ raceId, playerAddress: wallet.address, type });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: String(err.message || err) });
+    res.status(500).json({ error: cleanErrorMessage(err) });
   }
 });
 
@@ -142,7 +149,7 @@ app.post("/race/:id/start", async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: String(err.message || err) });
+    res.status(500).json({ error: cleanErrorMessage(err) });
   }
 });
 
@@ -208,7 +215,7 @@ app.post("/lobby/quickmatch", async (req, res) => {
     res.json({ raceId, playerAddress: wallet.address, mode });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: String(err.message || err) });
+    res.status(500).json({ error: cleanErrorMessage(err) });
   }
 });
 
@@ -222,12 +229,18 @@ app.post("/lobby/showcase", async (req, res) => {
     const raceId = readContract.interface.parseLog(receipt.logs[0]).args.raceId.toString();
     res.json({ raceId });
   } catch (err) {
-    res.status(500).json({ error: String(err.message || err) });
+    res.status(500).json({ error: cleanErrorMessage(err) });
   }
 });
 
+// Backend and frontend are on different origins now (Railway vs Vercel) —
+// req.protocol/req.get("host") would build a QR pointing at the *backend's*
+// own domain, not the actual site people should land on. FRONTEND_URL is
+// the one place that needs updating if the frontend's URL ever changes.
+const FRONTEND_URL = process.env.FRONTEND_URL || "https://monadrift.vercel.app";
+
 app.get("/lobby/:id/qr", async (req, res) => {
-  const base = req.query.base || `${req.protocol}://${req.get("host")}`;
+  const base = req.query.base || FRONTEND_URL;
   const url = `${base}/?lobby=${req.params.id}`;
   const png = await QRCode.toBuffer(url, { width: 512 });
   res.set("Content-Type", "image/png");
@@ -259,7 +272,7 @@ app.get("/race/:id/state", async (req, res) => {
     );
     res.json({ raceId, phase: Number(phase), pot: pot.toString(), players });
   } catch (err) {
-    res.status(500).json({ error: String(err.message || err) });
+    res.status(500).json({ error: cleanErrorMessage(err) });
   }
 });
 
@@ -289,7 +302,7 @@ app.get("/race/:id/segment/:i", async (req, res) => {
     }
     res.json({ index: i, type: ["STRAIGHT", "TURN", "OBSTACLE", "BOOST"][Number(segType)], correctLane, isCheckpoint });
   } catch (err) {
-    res.status(500).json({ error: String(err.message || err) });
+    res.status(500).json({ error: cleanErrorMessage(err) });
   }
 });
 
@@ -325,7 +338,7 @@ app.post("/race/:id/move", async (req, res) => {
     res.json(payload);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: String(err.message || err) });
+    res.status(500).json({ error: cleanErrorMessage(err) });
   }
 });
 
@@ -364,7 +377,7 @@ app.get("/race/:id/proof", async (req, res) => {
     events.sort((a, b) => a.block - b.block);
     res.json({ raceId, events });
   } catch (err) {
-    res.status(500).json({ error: String(err.message || err) });
+    res.status(500).json({ error: cleanErrorMessage(err) });
   }
 });
 

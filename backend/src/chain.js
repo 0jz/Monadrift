@@ -130,6 +130,15 @@ export function contractFor(wallet) {
   return contractAs(wallet);
 }
 
+/// A CALL_EXCEPTION means the chain itself rejected the call (a require()
+/// failed, e.g. "not active" for a broke/finished player) — that's a real,
+/// deterministic answer, not a network blip. Retrying it 6 times just makes
+/// a slow request slower (14-23s observed) before failing anyway with the
+/// same result. Only retry error classes that are plausibly transient.
+function isGenuineRevert(err) {
+  return err?.code === "CALL_EXCEPTION";
+}
+
 /// Monad testnet's mempool has been observed rejecting well-funded,
 /// correctly-priced transactions with a misleading "insufficient balance"
 /// error — inconsistently, not correlated with fee level (see PROJECT.md
@@ -143,6 +152,7 @@ export async function sendTx(fn, { retries = 6, delayMs = 1200 } = {}) {
       return await tx.wait();
     } catch (err) {
       lastErr = err;
+      if (isGenuineRevert(err)) throw err; // fail fast — no amount of retrying changes a require() failure
       if (attempt === 2) reconnect(); // a few same-connection retries first, then assume it's stuck
       if (attempt < retries - 1) await new Promise((r) => setTimeout(r, delayMs));
     }

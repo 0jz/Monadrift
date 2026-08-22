@@ -86,6 +86,17 @@ function clearIdentity() {
   sessionStorage.removeItem("monadrift.raceId");
 }
 
+// Backend sends stake/pot as raw wei strings (e.g. "1000000000000000") —
+// display that directly and it reads as an absurd number. No ethers.js on
+// the frontend, so a small manual formatter instead of ethers.formatEther.
+function weiToMon(wei, decimals = 4) {
+  const n = BigInt(wei);
+  const whole = n / 1000000000000000000n;
+  const frac = n % 1000000000000000000n;
+  const fracStr = frac.toString().padStart(18, "0").slice(0, decimals);
+  return `${whole}.${fracStr}`;
+}
+
 function shortAddress(address) {
   return address ? `${address.slice(0, 6)}…${address.slice(-4)}` : "—";
 }
