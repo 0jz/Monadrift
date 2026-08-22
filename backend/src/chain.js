@@ -39,9 +39,11 @@ function makeProvider() {
   // ethers' default polling interval (4000ms) is what's checking whether a
   // tx confirmed — completely unrelated to Monad's actual ~300ms block
   // time. A move landing on-chain in ~600ms was still taking 4+ seconds to
-  // report back, because tx.wait() only re-checked every 4s. This is the
-  // real fix for that, not the chain being slow.
-  p.pollingInterval = 250;
+  // report back, because tx.wait() only re-checked every 4s. 100ms trades
+  // more frequent eth_getTransactionReceipt polling for lower detection
+  // latency — worth it since a move already landed is just waiting to be
+  // noticed, not waiting on the chain itself.
+  p.pollingInterval = 100;
   return p;
 }
 
