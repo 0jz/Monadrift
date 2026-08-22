@@ -3,11 +3,13 @@
 
 // Locally, the backend serves these pages itself (same origin). Deployed
 // to Vercel, there's no backend at that origin at all — this points the
-// deployed frontend at the backend's public tunnel instead. Update
-// TUNNEL_BACKEND whenever the tunnel restarts (its URL isn't stable).
+// deployed frontend at the Railway-hosted backend instead. Stable URL,
+// no tunnel involved (previously this was a localtunnel URL that had to
+// be updated by hand every time the tunnel dropped — see git history if
+// curious how much of a problem that was).
 const LOCAL_HOSTS = ["localhost", "127.0.0.1"];
-const TUNNEL_BACKEND = "https://happy-dingo-83.loca.lt"; // localtunnel dropped the fixed subdomain again
-const API = LOCAL_HOSTS.includes(location.hostname) ? location.origin : TUNNEL_BACKEND;
+const REMOTE_BACKEND = "https://monadrift-backend-production.up.railway.app";
+const API = LOCAL_HOSTS.includes(location.hostname) ? location.origin : REMOTE_BACKEND;
 const WS_BASE = API.replace(/^http/, "ws");
 
 // The free tunnel backing the deployed frontend drops individual requests
