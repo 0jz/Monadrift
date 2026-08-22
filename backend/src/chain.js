@@ -24,8 +24,12 @@ try {
   abi = [];
 }
 
-export const provider = new ethers.JsonRpcProvider(RPC_URL);
-export const funder = FUNDER_PRIVATE_KEY ? new ethers.Wallet(FUNDER_PRIVATE_KEY, provider) : null;
+// `let`, not `const` — see reconnect() below. ES module named imports are
+// live bindings, so reassigning these here is visible to every file that
+// did `import { provider } from "./chain.js"` without them needing to
+// re-import anything.
+export let provider = new ethers.JsonRpcProvider(RPC_URL);
+export let funder = FUNDER_PRIVATE_KEY ? new ethers.Wallet(FUNDER_PRIVATE_KEY, provider) : null;
 
 // Roughly matches what `cast`'s own fee estimation used in a confirmed-
 // successful test call, as a reasonable default — but see sendTx() below:
@@ -60,13 +64,32 @@ function contractAs(signerOrProvider) {
   return new ethers.Contract(CONTRACT_ADDRESS || ethers.ZeroAddress, abi, signerOrProvider);
 }
 
-export const readContract = contractAs(provider);
+export let readContract = contractAs(provider);
 
 // playerId (arbitrary string from the client) -> ethers.Wallet
 // This is the fix for the "shared relayer can't represent multiple players" problem:
 // msg.sender must be distinct per player on-chain, so each session gets its own
 // ephemeral key, auto-funded from the funder wallet. The human never sees it.
 const sessions = new Map();
+
+/// Recreates the provider (and everything bound to it) from scratch. Node's
+/// global fetch pools/reuses underlying connections; if Monad's RPC or an
+/// intermediary closes one without cleanly signaling it, ethers can end up
+/// stuck reusing a dead connection — symptoms are trivial read calls
+/// (getPhase, a plain storage read with no possible revert) failing with
+/// "missing revert data" repeatedly, even though a fresh `cast call`
+/// against the same RPC works fine. Retrying on the SAME provider doesn't
+/// help here (confirmed: it fails identically every time); a fresh
+/// connection does. retryRpc/sendTx call this after repeated failures.
+export function reconnect() {
+  provider = new ethers.JsonRpcProvider(RPC_URL);
+  if (FUNDER_PRIVATE_KEY) funder = new ethers.Wallet(FUNDER_PRIVATE_KEY, provider);
+  readContract = contractAs(provider);
+  for (const [playerId, wallet] of sessions) {
+    sessions.set(playerId, wallet.connect(provider));
+  }
+  console.warn("[chain] reconnected to RPC after repeated failures");
+}
 
 export async function getOrCreateSession(playerId) {
   let wallet = sessions.get(playerId);
@@ -116,6 +139,7 @@ export async function sendTx(fn, { retries = 6, delayMs = 1200 } = {}) {
       return await tx.wait();
     } catch (err) {
       lastErr = err;
+      if (attempt === 2) reconnect(); // a few same-connection retries first, then assume it's stuck
       if (attempt < retries - 1) await new Promise((r) => setTimeout(r, delayMs));
     }
   }
@@ -126,13 +150,14 @@ export async function sendTx(fn, { retries = 6, delayMs = 1200 } = {}) {
 /// and /race/:id/segment/:i make several of these per request, and none of
 /// them were retried before, so a single flaky RPC response turned into a
 /// 500 for the whole endpoint.
-export async function retryRpc(fn, { retries = 3, delayMs = 500 } = {}) {
+export async function retryRpc(fn, { retries = 4, delayMs = 500 } = {}) {
   let lastErr;
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
       return await fn();
     } catch (err) {
       lastErr = err;
+      if (attempt === 1) reconnect(); // fail fast into a reconnect — reads are called constantly (state polling), don't let them limp along on a dead connection
       if (attempt < retries - 1) await new Promise((r) => setTimeout(r, delayMs));
     }
   }
