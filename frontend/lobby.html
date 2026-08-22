@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Monadrift — Lobby</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div class="shell">
+  <header>
+    <div class="brand">
+      <div class="brand-mark"></div>
+      <h1>Mona<span class="rift">drift</span></h1>
+    </div>
+    <span class="player-tag mono" id="playerPill">—</span>
+  </header>
+
+  <div class="card lobby-picker" id="pickerView">
+    <div class="lobby-option">
+      <div>
+        <h2>Duel</h2>
+        <p class="join-blurb">Head-to-head. Race starts the instant a second racer scans in.</p>
+      </div>
+      <button class="lobby-create" data-type="duel">Create duel</button>
+    </div>
+    <div class="lobby-option">
+      <div>
+        <h2>Public lobby</h2>
+        <p class="join-blurb">Open field, no cap. You start the race whenever you're ready.</p>
+      </div>
+      <button class="lobby-create" data-type="public">Create public lobby</button>
+    </div>
+  </div>
+
+  <div class="card lobby-waiting hidden" id="waitingView">
+    <div class="waiting-head">
+      <h2 id="waitingTitle">Duel lobby</h2>
+      <span class="mono" id="waitingCount">1 joined</span>
+    </div>
+    <img id="qrImage" class="qr" alt="Scan to join this lobby" />
+    <p class="join-blurb">Scan to join race <span class="mono" id="waitingRaceId">—</span>.</p>
+    <button id="startBtn" class="hidden">Start race</button>
+    <p id="waitingStatus" class="join-status"></p>
+  </div>
+</div>
+
+<script src="shared.js"></script>
+<script src="lobby.js"></script>
+</body>
+</html>

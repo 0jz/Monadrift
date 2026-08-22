@@ -5,7 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
 import QRCode from "qrcode";
-import { readContract, getOrCreateSession, contractFor, provider } from "./chain.js";
+import { readContract, getOrCreateSession, contractFor, provider, funder } from "./chain.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -17,11 +17,16 @@ app.use(express.static(path.join(__dirname, "..", "..", "frontend")));
 
 const PORT = process.env.PORT || 8787;
 const LANES = ["LEFT", "CENTER", "RIGHT"];
+const DUEL_MAX_PLAYERS = 2;
 
 // mode -> open raceId waiting for players (in-memory matchmaking; the
 // contract itself doesn't track "open" lobbies, this is just routing)
 const openLobbies = { HUMAN_ONLY: null, AGENT_ONLY: null, SHOWCASE_MIXED: null };
 const DEFAULT_ENTRY_FEE = "0.001"; // ether, matches PROJECT.md placeholder economics
+
+// raceId -> { type: "duel" | "public", createdBy }. Only tracks the bits the
+// contract itself has no concept of (capacity, who's allowed to auto-start).
+const lobbyMeta = new Map();
 
 // raceId -> Set<ws> for the live stream
 const streams = new Map();
@@ -32,7 +37,79 @@ function broadcast(raceId, payload) {
   for (const ws of set) if (ws.readyState === 1) ws.send(msg);
 }
 
+/// Commits and reveals a seed back-to-back to actually start a race — see
+/// PROJECT.md §4. This was a genuine gap: nothing previously called this,
+/// which means `chooseLane` would always have reverted with "not running".
+/// Two operator (funder-paid) transactions, not a player cost.
+async function startRace(raceId) {
+  const { ethers } = await import("ethers");
+  const c = contractFor(funder);
+  const seed = BigInt(ethers.hexlify(ethers.randomBytes(32)));
+  const salt = BigInt(ethers.hexlify(ethers.randomBytes(32)));
+  const commitHash = ethers.keccak256(ethers.solidityPacked(["uint256", "uint256"], [seed, salt]));
+
+  const commitTx = await c.commitSeed(raceId, commitHash);
+  await commitTx.wait();
+  const startTx = await c.startRace(raceId, seed, salt);
+  await startTx.wait();
+
+  broadcast(raceId, { type: "started", raceId });
+}
+
 // --- lobby / matchmaking ---
+
+app.post("/session/register", async (req, res) => {
+  try {
+    const { playerId } = req.body;
+    if (!playerId) return res.status(400).json({ error: "playerId required" });
+    const wallet = await getOrCreateSession(playerId);
+    res.json({ playerId, address: wallet.address });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: String(err.message || err) });
+  }
+});
+
+/// Explicit lobby creation for the register -> lobby-select -> race flow
+/// (PROJECT.md §10). "duel" caps at 2 players and auto-starts the instant
+/// the second player joins; "public" has no cap and starts when the
+/// creator calls /race/:id/start.
+app.post("/lobby/create", async (req, res) => {
+  try {
+    const { playerId, type = "public", entryFee = DEFAULT_ENTRY_FEE } = req.body;
+    if (!playerId) return res.status(400).json({ error: "playerId required" });
+    if (!["duel", "public"].includes(type)) return res.status(400).json({ error: "type must be duel or public" });
+
+    const { ethers } = await import("ethers");
+    const feeWei = ethers.parseEther(String(entryFee));
+    const operatorContract = contractFor(funder);
+    const tx = await operatorContract.createLobby(0, feeWei); // HUMAN_ONLY
+    const receipt = await tx.wait();
+    const raceId = readContract.interface.parseLog(receipt.logs[0]).args.raceId.toString();
+    lobbyMeta.set(raceId, { type, createdBy: playerId });
+
+    const wallet = await getOrCreateSession(playerId);
+    const joinTx = await contractFor(wallet).join(raceId, { value: feeWei });
+    await joinTx.wait();
+
+    res.json({ raceId, playerAddress: wallet.address, type });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: String(err.message || err) });
+  }
+});
+
+/// Manual start for "public" lobbies — the creator decides when enough
+/// people have joined. "duel" lobbies never need this, they auto-start.
+app.post("/race/:id/start", async (req, res) => {
+  try {
+    await startRace(req.params.id);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: String(err.message || err) });
+  }
+});
 
 app.post("/lobby/quickmatch", async (req, res) => {
   try {
@@ -55,6 +132,13 @@ app.post("/lobby/quickmatch", async (req, res) => {
       if (Number(phase) !== 0) {
         return res.status(409).json({ error: "lobby is no longer open" });
       }
+      const meta = lobbyMeta.get(raceId);
+      if (meta?.type === "duel") {
+        const current = await readContract.getPlayers(raceId);
+        if (current.length >= DUEL_MAX_PLAYERS) {
+          return res.status(409).json({ error: "duel lobby is full" });
+        }
+      }
       // Trust the chain for the required fee, not the client-supplied one —
       // a specific lobby was already created with its own entryFee.
       feeWei = await readContract.getEntryFee(raceId);
@@ -65,8 +149,12 @@ app.post("/lobby/quickmatch", async (req, res) => {
       feeWei = ethers.parseEther(String(entryFee));
       raceId = openLobbies[mode];
       if (raceId === null) {
+        // Lobby creation is an operator cost, not something the first
+        // player to arrive should pay gas for — use the funder wallet,
+        // not the player's session wallet.
         const modeIdx = mode === "AGENT_ONLY" ? 1 : 0;
-        const tx = await c.createLobby(modeIdx, feeWei);
+        const operatorContract = contractFor(funder);
+        const tx = await operatorContract.createLobby(modeIdx, feeWei);
         const receipt = await tx.wait();
         raceId = readContract.interface.parseLog(receipt.logs[0]).args.raceId.toString();
         openLobbies[mode] = raceId;
@@ -75,6 +163,14 @@ app.post("/lobby/quickmatch", async (req, res) => {
 
     const joinTx = await c.join(raceId, { value: feeWei });
     await joinTx.wait();
+
+    const meta = lobbyMeta.get(raceId);
+    if (meta?.type === "duel") {
+      const current = await readContract.getPlayers(raceId);
+      if (current.length >= DUEL_MAX_PLAYERS) {
+        startRace(raceId).catch((err) => console.error(`[start] duel ${raceId} failed to auto-start:`, err));
+      }
+    }
 
     res.json({ raceId, playerAddress: wallet.address, mode });
   } catch (err) {
@@ -88,7 +184,7 @@ app.post("/lobby/showcase", async (req, res) => {
   try {
     const { entryFee = DEFAULT_ENTRY_FEE } = req.body;
     const { ethers } = await import("ethers");
-    const c = contractFor(await getOrCreateSession("__operator__"));
+    const c = contractFor(funder);
     const tx = await c.createLobby(2, ethers.parseEther(String(entryFee))); // SHOWCASE_MIXED = 2
     const receipt = await tx.wait();
     const raceId = readContract.interface.parseLog(receipt.logs[0]).args.raceId.toString();

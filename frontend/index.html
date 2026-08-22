@@ -15,14 +15,22 @@
     </div>
   </header>
 
-  <div class="card join-card">
+  <div class="card join-card" id="registerView">
     <p class="join-blurb">The track is generated seconds before the race. Nobody — human or agent — has seen it yet.</p>
     <div id="join">
       <input id="playerId" placeholder="your name" autocomplete="off" />
-      <select id="mode"><option value="HUMAN_ONLY">Human lobby</option></select>
-      <button id="joinBtn">Join race</button>
+      <button id="registerBtn">Register</button>
     </div>
     <p id="joinStatus" class="join-status"></p>
+  </div>
+
+  <div class="card join-card hidden" id="identityView">
+    <p class="join-blurb">Your on-chain identity for this session — a fresh wallet, funded automatically, no seed phrase.</p>
+    <div class="identity-row">
+      <span class="stat-label">Public address</span>
+      <span class="mono identity-address" id="identityAddress">—</span>
+    </div>
+    <button id="continueBtn">Continue to lobby</button>
   </div>
 </div>
 

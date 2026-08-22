@@ -6,29 +6,40 @@ const status = (msg, isError = false) => {
 };
 
 const params = new URLSearchParams(location.search);
-const presetLobby = params.get("lobby"); // set by the per-lobby QR code, see backend GET /lobby/:id/qr
+const presetLobby = params.get("lobby"); // set by a per-lobby QR code, see backend GET /lobby/:id/qr
 
-if (presetLobby) status(`Joining lobby ${presetLobby}…`);
-
-el("joinBtn").onclick = async () => {
+el("registerBtn").onclick = async () => {
   const playerId = el("playerId").value.trim() || `player-${Math.random().toString(36).slice(2, 6)}`;
-  const mode = el("mode").value;
-  const btn = el("joinBtn");
-
+  const btn = el("registerBtn");
   btn.disabled = true;
-  status("Joining…");
+  status(presetLobby ? "Registering and joining lobby…" : "Registering…");
+
   try {
-    const body = { playerId, mode };
-    if (presetLobby) body.lobby = presetLobby;
-    const result = await api("/lobby/quickmatch", { method: "POST", body: JSON.stringify(body) });
-    saveSession(playerId, result.raceId, mode);
-    location.href = "race.html";
+    const { address } = await api("/session/register", { method: "POST", body: JSON.stringify({ playerId }) });
+    saveIdentity(playerId, address);
+
+    if (presetLobby) {
+      // Scanned a lobby-specific QR — skip lobby selection entirely and
+      // join that exact race directly.
+      const result = await api("/lobby/quickmatch", { method: "POST", body: JSON.stringify({ playerId, lobby: presetLobby }) });
+      saveRace(result.raceId);
+      location.href = "race.html";
+      return;
+    }
+
+    el("identityAddress").textContent = address;
+    el("registerView").classList.add("hidden");
+    el("identityView").classList.remove("hidden");
   } catch (err) {
-    status(`Join failed: ${err.message}`, true);
+    status(`Failed: ${err.message}`, true);
     btn.disabled = false;
   }
 };
 
+el("continueBtn")?.addEventListener("click", () => {
+  location.href = "lobby.html";
+});
+
 el("playerId").addEventListener("keydown", (evt) => {
-  if (evt.key === "Enter") el("joinBtn").click();
+  if (evt.key === "Enter") el("registerBtn").click();
 });

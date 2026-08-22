@@ -11,16 +11,29 @@ async function api(path, opts) {
   return body;
 }
 
-function saveSession(playerId, raceId, mode) {
+// Identity: set once at registration (index.html), persists across lobby
+// selection and into the race — this is "who you are", separate from
+// "which race you're currently in".
+function saveIdentity(playerId, address) {
   sessionStorage.setItem("monadrift.playerId", playerId);
+  sessionStorage.setItem("monadrift.address", address);
+}
+
+function loadIdentity() {
+  return {
+    playerId: sessionStorage.getItem("monadrift.playerId"),
+    address: sessionStorage.getItem("monadrift.address"),
+  };
+}
+
+// Race session: set once a lobby is created/joined (lobby.html or a QR join).
+function saveRace(raceId) {
   sessionStorage.setItem("monadrift.raceId", raceId);
-  sessionStorage.setItem("monadrift.mode", mode);
 }
 
 function loadSession() {
   return {
-    playerId: sessionStorage.getItem("monadrift.playerId"),
+    ...loadIdentity(),
     raceId: sessionStorage.getItem("monadrift.raceId"),
-    mode: sessionStorage.getItem("monadrift.mode"),
   };
 }

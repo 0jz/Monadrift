@@ -110,6 +110,10 @@ function connectStream() {
   ws = new WebSocket(`${WS_BASE}/ws?raceId=${raceId}`);
   ws.onmessage = (evt) => {
     const msg = JSON.parse(evt.data);
+    if (msg.type === "started") {
+      hideWaiting();
+      return;
+    }
     if (msg.type === "move" && msg.playerId === playerId) {
       myPosition = msg.position;
       el("hudPos").textContent = msg.position;
@@ -159,6 +163,31 @@ window.addEventListener("keydown", (evt) => {
   sendMove(lane, button);
 });
 
+function showWaiting() {
+  document.body.classList.add("race-waiting");
+  log("Waiting for the race to start…");
+}
+function hideWaiting() {
+  document.body.classList.remove("race-waiting");
+}
+
+async function checkPhaseAndInit() {
+  const state = await api(`/race/${raceId}/state`);
+  if (state.phase !== 2) {
+    showWaiting();
+    // "started" over the WS stream (below) is the primary trigger; this
+    // poll is only a fallback in case the WS message is missed.
+    const poll = setInterval(async () => {
+      const s = await api(`/race/${raceId}/state`);
+      if (s.phase === 2) {
+        clearInterval(poll);
+        hideWaiting();
+      }
+    }, 1500);
+  }
+}
+
 resizeCanvas();
 connectStream();
+checkPhaseAndInit();
 revealNext();

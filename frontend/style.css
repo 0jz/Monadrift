@@ -88,7 +88,46 @@ header { display: flex; justify-content: space-between; align-items: center; mar
 .card::before { top: -1px; left: -1px; border-right: none; border-bottom: none; }
 .card::after { bottom: -1px; right: -1px; border-left: none; border-top: none; }
 
+.hidden { display: none !important; }
+
 .join-card { padding: 30px 26px; }
+
+.identity-row {
+  display: flex; justify-content: space-between; align-items: center;
+  background: var(--surface-2); border: 1px solid var(--line);
+  padding: 14px 16px; margin-bottom: 18px;
+}
+.identity-address { font-size: 14px; color: var(--accent); }
+
+.lobby-picker { padding: 6px; display: flex; flex-direction: column; }
+.lobby-option {
+  display: flex; justify-content: space-between; align-items: center; gap: 16px;
+  padding: 20px; border-bottom: 1px solid var(--line);
+}
+.lobby-option:last-child { border-bottom: none; }
+.lobby-option h2 { font-size: 16px; margin: 0 0 6px; text-transform: uppercase; letter-spacing: 0.02em; }
+.lobby-option .join-blurb { margin: 0; border-left: none; padding-left: 0; max-width: 34ch; }
+.lobby-create {
+  flex-shrink: 0; padding: 12px 18px; border: 1px solid var(--accent); cursor: pointer;
+  background: transparent; color: var(--accent); font-family: inherit;
+  font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: 0.02em;
+}
+.lobby-create:hover:not(:disabled) { background: var(--accent); color: var(--accent-ink); }
+.lobby-create:disabled { opacity: 0.4; cursor: default; }
+
+.lobby-waiting { padding: 26px; text-align: center; }
+.waiting-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+.waiting-head h2 { font-size: 16px; margin: 0; text-transform: uppercase; letter-spacing: 0.02em; }
+.waiting-head .mono { color: var(--accent); font-size: 12px; }
+.qr { width: 200px; height: 200px; background: white; padding: 10px; margin: 0 auto 16px; display: block; }
+#waitingView #startBtn {
+  padding: 13px 22px; border: 1px solid var(--accent); cursor: pointer;
+  background: var(--accent); color: var(--accent-ink); font-family: inherit;
+  font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.02em;
+}
+#waitingView .join-blurb { border-left: none; padding-left: 0; }
+
+body.race-waiting #track-wrap, body.race-waiting #hud, body.race-waiting #lanes { opacity: 0.25; pointer-events: none; }
 .join-blurb {
   margin: 0 0 20px; font-size: 13px; color: var(--ink-dim); line-height: 1.6;
   border-left: 2px solid var(--line); padding-left: 12px;
@@ -104,14 +143,15 @@ header { display: flex; justify-content: space-between; align-items: center; mar
 }
 #join input::placeholder { color: var(--ink-dim); }
 #join input:focus, #join select:focus { border-color: var(--accent); }
-#join button {
+#join button, #identityView > button {
   padding: 13px 22px; border: 1px solid var(--accent); cursor: pointer;
-  background: var(--accent); color: var(--accent-ink);
+  background: var(--accent); color: var(--accent-ink); width: 100%;
   font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.02em;
   transition: transform 0.06s ease;
 }
-#join button:hover:not(:disabled) { transform: translate(-2px, -2px); box-shadow: 3px 3px 0 var(--accent); }
-#join button:active:not(:disabled) { transform: translate(0, 0); box-shadow: none; }
+#join button { width: auto; }
+#join button:hover:not(:disabled), #identityView > button:hover:not(:disabled) { transform: translate(-2px, -2px); box-shadow: 3px 3px 0 var(--accent); }
+#join button:active:not(:disabled), #identityView > button:active:not(:disabled) { transform: translate(0, 0); box-shadow: none; }
 #join button:disabled { opacity: 0.4; cursor: default; border-color: var(--line); background: var(--surface-2); color: var(--ink-dim); }
 
 #track-wrap { padding: 0; overflow: hidden; }
