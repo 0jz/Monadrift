@@ -8,6 +8,15 @@ import QRCode from "qrcode";
 import crypto from "node:crypto";
 import { readContract, getOrCreateSession, contractFor, provider, funder, TX_OVERRIDES, sendTx } from "./chain.js";
 
+// A single unexpected RPC error (rate limit, transient network blip, an
+// ethers internal poll rejecting outside the normal call chain) previously
+// crashed this entire process — taking down every connected player mid-
+// race. This is the last line of defense: log it, keep serving. Individual
+// requests still fail cleanly via their own try/catch; this only stops a
+// stray rejection from ending the whole server.
+process.on("unhandledRejection", (err) => console.error("[unhandled rejection]", err));
+process.on("uncaughtException", (err) => console.error("[uncaught exception]", err));
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 app.use(cors());

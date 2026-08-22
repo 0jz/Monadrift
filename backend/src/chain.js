@@ -60,13 +60,25 @@ export async function getOrCreateSession(playerId) {
   sessions.set(playerId, wallet);
 
   if (funder) {
+    const amount = ethers.parseEther(SESSION_FUND_AMOUNT);
     await sendTx(() =>
       funder.sendTransaction({
         to: wallet.address,
-        value: ethers.parseEther(SESSION_FUND_AMOUNT),
+        value: amount,
         ...TX_OVERRIDES,
       })
     );
+    // tx.wait() confirming doesn't guarantee every node behind this RPC
+    // endpoint has caught up yet — a spend attempted immediately after can
+    // hit a node that still sees the pre-funding balance and reject it.
+    // Poll until the funded balance is actually visible before handing
+    // the wallet back. This is very likely the real cause of the
+    // "insufficient balance on a well-funded wallet" failures seen so far.
+    for (let i = 0; i < 15; i++) {
+      const bal = await provider.getBalance(wallet.address);
+      if (bal >= amount) break;
+      await new Promise((r) => setTimeout(r, 400));
+    }
   }
   return wallet;
 }
