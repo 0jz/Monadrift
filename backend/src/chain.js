@@ -34,7 +34,18 @@ try {
 // live bindings, so reassigning these here is visible to every file that
 // did `import { provider } from "./chain.js"` without them needing to
 // re-import anything.
-export let provider = new ethers.JsonRpcProvider(RPC_URL);
+function makeProvider() {
+  const p = new ethers.JsonRpcProvider(RPC_URL);
+  // ethers' default polling interval (4000ms) is what's checking whether a
+  // tx confirmed — completely unrelated to Monad's actual ~300ms block
+  // time. A move landing on-chain in ~600ms was still taking 4+ seconds to
+  // report back, because tx.wait() only re-checked every 4s. This is the
+  // real fix for that, not the chain being slow.
+  p.pollingInterval = 250;
+  return p;
+}
+
+export let provider = makeProvider();
 export let funder = FUNDER_PRIVATE_KEY ? new ethers.Wallet(FUNDER_PRIVATE_KEY, provider) : null;
 
 // Roughly matches what `cast`'s own fee estimation used in a confirmed-
@@ -101,7 +112,7 @@ function deriveWalletFor(playerId) {
 /// help here (confirmed: it fails identically every time); a fresh
 /// connection does. retryRpc/sendTx call this after repeated failures.
 export function reconnect() {
-  provider = new ethers.JsonRpcProvider(RPC_URL);
+  provider = makeProvider();
   if (FUNDER_PRIVATE_KEY) funder = new ethers.Wallet(FUNDER_PRIVATE_KEY, provider);
   readContract = contractAs(provider);
   for (const [playerId, wallet] of sessions) {
