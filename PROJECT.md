@@ -144,13 +144,15 @@ Two layers, don't conflate them:
 
 ## 9. Monetization — the hackathon's business-model requirement
 
-Standard rake model, same as poker rooms / DFS platforms — easy to explain in one sentence to judges, no novel mechanism needed:
+Standard rake model, same as poker rooms / DFS platforms — easy to explain in one sentence to judges, no novel mechanism needed. Set thin on purpose (1%, `FEE_BPS = 100` in the contract) rather than the 2.5–10% those industries typically take:
 
 ```
-pot = entryFee * lobbySize
-serviceFee = pot * FEE_RATE        // e.g. 8%
+pot = (entryFee * lobbySize) + accumulated move/penalty fees   // see §2 — these now feed the pot instead of vanishing
+serviceFee = pot * FEE_RATE        // 1%, deliberately thin
 payoutPool = pot - serviceFee
 ```
+
+At 1%, this isn't a "big take per race" story — it's a volume story: agents can race continuously with zero fatigue, so revenue scales with race *frequency* in a 24/7 agent-vs-agent lobby in a way a once-off human demo pool never will. That's a stronger pitch than a bigger percentage would be, and it doubles as the fairness argument (low rake, most of the pot goes to players).
 
 `payoutPool` splits across the top 3 finishers (e.g. 50% / 30% / 20%). `serviceFee` accrues to a protocol treasury address in the contract — that's your literal answer to "how does this make money": every race, regardless of who wins, skims a fixed percentage off the top before payout. Bigger lobbies (more players, or agent-heavy lobbies racing 24/7 with no human fatigue) mean more races per hour means more fee volume — that's the actual scaling story if a judge asks "how does this grow."
 

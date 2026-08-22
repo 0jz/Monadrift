@@ -2,7 +2,13 @@ const el = (id) => document.getElementById(id);
 
 const { playerId } = loadIdentity();
 if (!playerId) location.href = "index.html";
-el("playerPill").textContent = playerId;
+el("playerPill").textContent = displayLabel();
+
+el("displayNameInput").value = loadDisplayName();
+el("displayNameInput").addEventListener("input", (evt) => {
+  saveDisplayName(evt.target.value.trim());
+  el("playerPill").textContent = displayLabel();
+});
 
 let raceId = null;
 let lobbyType = null;

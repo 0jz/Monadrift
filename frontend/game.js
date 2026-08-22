@@ -9,7 +9,7 @@ const { playerId, raceId } = loadSession();
 if (!playerId || !raceId) {
   location.href = "index.html";
 }
-el("playerPill").textContent = playerId;
+el("playerPill").textContent = displayLabel();
 
 let ws = null;
 

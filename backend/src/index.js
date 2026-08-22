@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
 import QRCode from "qrcode";
+import crypto from "node:crypto";
 import { readContract, getOrCreateSession, contractFor, provider, funder } from "./chain.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -60,8 +61,11 @@ async function startRace(raceId) {
 
 app.post("/session/register", async (req, res) => {
   try {
-    const { playerId } = req.body;
-    if (!playerId) return res.status(400).json({ error: "playerId required" });
+    // playerId can be a self-chosen address/handle, or omitted entirely —
+    // "wallets or generated" per PROJECT.md. It's a lookup key for the
+    // backend-managed session wallet either way, never a real signer's key.
+    let { playerId } = req.body;
+    if (!playerId) playerId = `p-${crypto.randomBytes(6).toString("hex")}`;
     const wallet = await getOrCreateSession(playerId);
     res.json({ playerId, address: wallet.address });
   } catch (err) {

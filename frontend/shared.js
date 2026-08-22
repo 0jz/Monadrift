@@ -37,3 +37,24 @@ function loadSession() {
     raceId: sessionStorage.getItem("monadrift.raceId"),
   };
 }
+
+// Display name: cosmetic only, set at the lobby screen (not registration).
+// Local to this browser session — it's a label, not part of the on-chain
+// identity, so it's never sent to the backend or other players.
+function saveDisplayName(name) {
+  sessionStorage.setItem("monadrift.displayName", name);
+}
+function loadDisplayName() {
+  return sessionStorage.getItem("monadrift.displayName") || "";
+}
+
+function shortAddress(address) {
+  return address ? `${address.slice(0, 6)}…${address.slice(-4)}` : "—";
+}
+
+function displayLabel() {
+  const name = loadDisplayName();
+  if (name) return name;
+  const { address, playerId } = loadIdentity();
+  return address ? shortAddress(address) : playerId || "—";
+}

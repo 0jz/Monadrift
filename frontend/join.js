@@ -9,13 +9,18 @@ const params = new URLSearchParams(location.search);
 const presetLobby = params.get("lobby"); // set by a per-lobby QR code, see backend GET /lobby/:id/qr
 
 el("registerBtn").onclick = async () => {
-  const playerId = el("playerId").value.trim() || `player-${Math.random().toString(36).slice(2, 6)}`;
+  // Blank is valid on purpose — the backend generates a playerId if none is
+  // given (PROJECT.md: "wallets or generated"). Whatever's typed here is
+  // just a lookup key, never an actual signer — the real funded wallet is
+  // the one the backend returns as `address` below.
+  const typedAddress = el("addressInput").value.trim();
   const btn = el("registerBtn");
   btn.disabled = true;
   status(presetLobby ? "Registering and joining lobby…" : "Registering…");
 
   try {
-    const { address } = await api("/session/register", { method: "POST", body: JSON.stringify({ playerId }) });
+    const body = typedAddress ? { playerId: typedAddress } : {};
+    const { playerId, address } = await api("/session/register", { method: "POST", body: JSON.stringify(body) });
     saveIdentity(playerId, address);
 
     if (presetLobby) {
@@ -40,6 +45,6 @@ el("continueBtn")?.addEventListener("click", () => {
   location.href = "lobby.html";
 });
 
-el("playerId").addEventListener("keydown", (evt) => {
+el("addressInput").addEventListener("keydown", (evt) => {
   if (evt.key === "Enter") el("registerBtn").click();
 });

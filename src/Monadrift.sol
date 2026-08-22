@@ -15,7 +15,7 @@ contract Monadrift {
     uint8 public constant MAX_SPEED = 3;
     uint256 public constant MOVE_COST = 0.0001 ether;
     uint256 public constant COLLISION_PENALTY = 0.0005 ether;
-    uint16 public constant FEE_BPS = 800; // 8% service fee
+    uint16 public constant FEE_BPS = 100; // 1% service fee — thin on purpose; revenue story is race frequency (agents racing 24/7), not per-race take
     uint16 public constant BPS_DENOM = 10000;
 
     enum LobbyMode {
@@ -167,6 +167,7 @@ contract Monadrift {
         require(p.stake >= MOVE_COST, "broke");
 
         p.stake -= MOVE_COST;
+        r.pot += MOVE_COST; // fees from moving fund the winners' pool, not a black hole — see settle()
 
         uint16 nextSeg = p.position + 1;
         require(nextSeg <= SEGMENTS_TOTAL, "already finished");
@@ -200,6 +201,7 @@ contract Monadrift {
         if (wrongLane) {
             uint256 penalty = COLLISION_PENALTY > p.stake ? p.stake : COLLISION_PENALTY;
             p.stake -= penalty;
+            r.pot += penalty; // same reasoning as MOVE_COST above — a fee, not a transfer to another player
             p.speed = 0;
             _checkBroke(raceId, p);
             emit Moved(raceId, msg.sender, p.position, p.position, lane);

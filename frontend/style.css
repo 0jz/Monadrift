@@ -99,6 +99,15 @@ header { display: flex; justify-content: space-between; align-items: center; mar
 }
 .identity-address { font-size: 14px; color: var(--accent); }
 
+.display-name-card { padding: 10px; }
+.display-name-card input {
+  width: 100%; padding: 11px 14px; border: 1px solid var(--line);
+  background: var(--surface-2); color: var(--ink); font-family: inherit;
+  font-size: 14px; outline: none;
+}
+.display-name-card input::placeholder { color: var(--ink-dim); }
+.display-name-card input:focus { border-color: var(--accent); }
+
 .lobby-picker { padding: 6px; display: flex; flex-direction: column; }
 .lobby-option {
   display: flex; justify-content: space-between; align-items: center; gap: 16px;
