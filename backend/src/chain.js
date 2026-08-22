@@ -27,6 +27,16 @@ try {
 export const provider = new ethers.JsonRpcProvider(RPC_URL);
 export const funder = FUNDER_PRIVATE_KEY ? new ethers.Wallet(FUNDER_PRIVATE_KEY, provider) : null;
 
+// Roughly matches what `cast`'s own fee estimation used in a confirmed-
+// successful test call, as a reasonable default — but see sendTx() below:
+// this alone did NOT reliably fix testnet's flaky mempool admission
+// (higher and lower values both failed inconsistently), so the real fix
+// is retrying, not a specific fee number.
+export const TX_OVERRIDES = {
+  maxFeePerGas: ethers.parseUnits("210", "gwei"),
+  maxPriorityFeePerGas: ethers.parseUnits("5", "gwei"),
+};
+
 function contractAs(signerOrProvider) {
   // Falls back to the zero address so the server can boot (and serve the
   // static frontend) before a contract is deployed — any actual on-chain
@@ -50,17 +60,38 @@ export async function getOrCreateSession(playerId) {
   sessions.set(playerId, wallet);
 
   if (funder) {
-    const tx = await funder.sendTransaction({
-      to: wallet.address,
-      value: ethers.parseEther(SESSION_FUND_AMOUNT),
-    });
-    await tx.wait();
+    await sendTx(() =>
+      funder.sendTransaction({
+        to: wallet.address,
+        value: ethers.parseEther(SESSION_FUND_AMOUNT),
+        ...TX_OVERRIDES,
+      })
+    );
   }
   return wallet;
 }
 
 export function contractFor(wallet) {
   return contractAs(wallet);
+}
+
+/// Monad testnet's mempool has been observed rejecting well-funded,
+/// correctly-priced transactions with a misleading "insufficient balance"
+/// error — inconsistently, not correlated with fee level (see PROJECT.md
+/// for the debugging trail). Identical retries have consistently succeeded
+/// within a couple attempts, so retry rather than chase a moving target.
+export async function sendTx(fn, { retries = 3, delayMs = 1200 } = {}) {
+  let lastErr;
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      const tx = await fn();
+      return await tx.wait();
+    } catch (err) {
+      lastErr = err;
+      if (attempt < retries - 1) await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
+  throw lastErr;
 }
 
 export { abi };

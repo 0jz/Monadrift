@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
 import QRCode from "qrcode";
 import crypto from "node:crypto";
-import { readContract, getOrCreateSession, contractFor, provider, funder } from "./chain.js";
+import { readContract, getOrCreateSession, contractFor, provider, funder, TX_OVERRIDES, sendTx } from "./chain.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -49,10 +49,8 @@ async function startRace(raceId) {
   const salt = BigInt(ethers.hexlify(ethers.randomBytes(32)));
   const commitHash = ethers.keccak256(ethers.solidityPacked(["uint256", "uint256"], [seed, salt]));
 
-  const commitTx = await c.commitSeed(raceId, commitHash);
-  await commitTx.wait();
-  const startTx = await c.startRace(raceId, seed, salt);
-  await startTx.wait();
+  await sendTx(() => c.commitSeed(raceId, commitHash, TX_OVERRIDES));
+  await sendTx(() => c.startRace(raceId, seed, salt, TX_OVERRIDES));
 
   broadcast(raceId, { type: "started", raceId });
 }
@@ -87,14 +85,12 @@ app.post("/lobby/create", async (req, res) => {
     const { ethers } = await import("ethers");
     const feeWei = ethers.parseEther(String(entryFee));
     const operatorContract = contractFor(funder);
-    const tx = await operatorContract.createLobby(0, feeWei); // HUMAN_ONLY
-    const receipt = await tx.wait();
+    const receipt = await sendTx(() => operatorContract.createLobby(0, feeWei, TX_OVERRIDES)); // HUMAN_ONLY
     const raceId = readContract.interface.parseLog(receipt.logs[0]).args.raceId.toString();
     lobbyMeta.set(raceId, { type, createdBy: playerId });
 
     const wallet = await getOrCreateSession(playerId);
-    const joinTx = await contractFor(wallet).join(raceId, { value: feeWei });
-    await joinTx.wait();
+    await sendTx(() => contractFor(wallet).join(raceId, { value: feeWei, ...TX_OVERRIDES }));
 
     res.json({ raceId, playerAddress: wallet.address, type });
   } catch (err) {
@@ -158,15 +154,13 @@ app.post("/lobby/quickmatch", async (req, res) => {
         // not the player's session wallet.
         const modeIdx = mode === "AGENT_ONLY" ? 1 : 0;
         const operatorContract = contractFor(funder);
-        const tx = await operatorContract.createLobby(modeIdx, feeWei);
-        const receipt = await tx.wait();
+        const receipt = await sendTx(() => operatorContract.createLobby(modeIdx, feeWei, TX_OVERRIDES));
         raceId = readContract.interface.parseLog(receipt.logs[0]).args.raceId.toString();
         openLobbies[mode] = raceId;
       }
     }
 
-    const joinTx = await c.join(raceId, { value: feeWei });
-    await joinTx.wait();
+    await sendTx(() => c.join(raceId, { value: feeWei, ...TX_OVERRIDES }));
 
     const meta = lobbyMeta.get(raceId);
     if (meta?.type === "duel") {
@@ -189,8 +183,7 @@ app.post("/lobby/showcase", async (req, res) => {
     const { entryFee = DEFAULT_ENTRY_FEE } = req.body;
     const { ethers } = await import("ethers");
     const c = contractFor(funder);
-    const tx = await c.createLobby(2, ethers.parseEther(String(entryFee))); // SHOWCASE_MIXED = 2
-    const receipt = await tx.wait();
+    const receipt = await sendTx(() => c.createLobby(2, ethers.parseEther(String(entryFee)), TX_OVERRIDES)); // SHOWCASE_MIXED = 2
     const raceId = readContract.interface.parseLog(receipt.logs[0]).args.raceId.toString();
     res.json({ raceId });
   } catch (err) {
@@ -276,8 +269,7 @@ app.post("/race/:id/move", async (req, res) => {
     const c = contractFor(wallet);
 
     const started = Date.now();
-    const tx = await c.chooseLane(raceId, laneIdx);
-    const receipt = await tx.wait();
+    const receipt = await sendTx(() => c.chooseLane(raceId, laneIdx, TX_OVERRIDES));
     const latencyMs = Date.now() - started;
 
     const p = await readContract.getPlayer(raceId, wallet.address);
