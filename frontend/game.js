@@ -147,14 +147,37 @@ function drawTrack() {
   }
 }
 
+function updateLaneHint(seg) {
+  const hint = el("laneHint");
+  laneButtons.forEach((b) => b.classList.remove("correct-lane"));
+  if (!seg) {
+    hint.textContent = "";
+    return;
+  }
+  if (seg.correctLane) {
+    // This is the whole point of fog-of-war: the correct lane for the NEXT
+    // segment is meant to be visible and acted on, one step at a time —
+    // not a secret you're supposed to guess. It was being fetched but
+    // never shown, so every TURN/OBSTACLE was effectively a blind coin
+    // flip with real stake on the line.
+    hint.textContent = `${seg.type} ahead — go ${seg.correctLane}`;
+    const btn = [...laneButtons].find((b) => b.dataset.lane === seg.correctLane);
+    btn?.classList.add("correct-lane");
+  } else {
+    hint.textContent = seg.type === "BOOST" ? "BOOST ahead — any lane" : "Straight ahead — any lane";
+  }
+}
+
 async function revealNext() {
   const next = myPosition + 1;
   try {
     const seg = await api(`/race/${raceId}/segment/${next}?playerId=${encodeURIComponent(playerId)}`);
     knownSegments[next] = seg;
+    updateLaneHint(seg);
     drawTrack();
   } catch {
     // not revealed yet — fine, happens if we're behind
+    updateLaneHint(null);
   }
 }
 
