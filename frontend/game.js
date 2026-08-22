@@ -37,6 +37,21 @@ function resizeCanvas() {
 }
 window.addEventListener("resize", resizeCanvas);
 
+// The road as a 2D array of points, not a straight line of tiles: each
+// segment index maps to an (x, y) offset from three layered sine waves at
+// different frequencies/amplitudes — a cheap, deterministic stand-in for
+// Perlin noise. Purely cosmetic (not tied to the on-chain seed, since the
+// actual gameplay path is still just LEFT/CENTER/RIGHT per segment) — this
+// only changes how the same logical track is drawn.
+function roadPoint(i, tileW, tileH) {
+  const y =
+    Math.sin(i * 0.22) * tileH * 1.4 +
+    Math.sin(i * 0.07 + 1.7) * tileH * 2.2 +
+    Math.sin(i * 0.5 + 0.4) * tileH * 0.35;
+  const xJitter = Math.sin(i * 0.31 + 0.9) * tileW * 0.08;
+  return { dx: tileW * 0.66 + xJitter, dy: y };
+}
+
 function drawTrack() {
   const w = canvas.clientWidth;
   const h = canvas.clientHeight;
@@ -50,10 +65,45 @@ function drawTrack() {
   const visibleFrom = Math.max(0, myPosition - 2);
   const count = Math.ceil(w / (tileW * 0.66)) + 2;
 
+  // Precompute the curved points for every visible segment first — the
+  // road ribbon (drawn below, before the tiles) needs the full point list
+  // to draw one continuous curve rather than per-tile straight hops.
+  const points = [];
+  let cx = originX, cy = originY;
   for (let i = visibleFrom; i < visibleFrom + count; i++) {
+    if (i > visibleFrom) {
+      const { dx, dy } = roadPoint(i, tileW, tileH);
+      cx += dx;
+      cy = originY + dy;
+    }
+    points.push({ i, x: cx, y: cy });
+  }
+
+  // The road surface itself — a soft ribbon threaded through the tile
+  // centers via quadratic curves, so it reads as one winding road instead
+  // of floating diamonds in a line.
+  if (points.length > 1) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+    for (let k = 1; k < points.length - 1; k++) {
+      const mx = (points[k].x + points[k + 1].x) / 2;
+      const my = (points[k].y + points[k + 1].y) / 2;
+      ctx.quadraticCurveTo(points[k].x, points[k].y, mx, my);
+    }
+    ctx.lineTo(points[points.length - 1].x, points[points.length - 1].y);
+    ctx.strokeStyle = "#1c1e2a";
+    ctx.lineWidth = tileH * 1.35;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  for (const p of points) {
+    const { i, x } = p;
     const seg = knownSegments[i];
-    const x = originX + (i - visibleFrom) * (tileW * 0.66);
-    const y = originY + (i % 2 === 0 ? -laneWobble : laneWobble);
+    const y = p.y + (i % 2 === 0 ? -laneWobble : laneWobble);
 
     ctx.save();
     ctx.translate(x, y);
