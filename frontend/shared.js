@@ -10,14 +10,29 @@ const TUNNEL_BACKEND = "https://monadrift-backend.loca.lt"; // fixed subdomain â
 const API = LOCAL_HOSTS.includes(location.hostname) ? location.origin : TUNNEL_BACKEND;
 const WS_BASE = API.replace(/^http/, "ws");
 
-async function api(path, opts) {
-  const res = await fetch(`${API}${path}`, {
-    headers: {
-      "Content-Type": "application/json",
-      "bypass-tunnel-reminder": "true", // avoids localtunnel's interstitial warning page on first visit
-    },
-    ...opts,
-  });
+// The free tunnel backing the deployed frontend drops individual requests
+// occasionally (shows up as "NetworkError"/"Failed to fetch" â€” the request
+// never reaches the server at all). Retrying only when fetch() itself
+// throws is the safe scope: a request that got a real response (even an
+// error one) is never retried here, so this can't double-submit a move
+// that actually landed.
+async function api(path, opts, retriesLeft = 2) {
+  let res;
+  try {
+    res = await fetch(`${API}${path}`, {
+      headers: {
+        "Content-Type": "application/json",
+        "bypass-tunnel-reminder": "true", // avoids localtunnel's interstitial warning page on first visit
+      },
+      ...opts,
+    });
+  } catch (networkErr) {
+    if (retriesLeft > 0) {
+      await new Promise((r) => setTimeout(r, 600));
+      return api(path, opts, retriesLeft - 1);
+    }
+    throw networkErr;
+  }
   const body = await res.json();
   if (!res.ok) throw new Error(body.error || res.statusText);
   return body;
