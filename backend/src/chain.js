@@ -108,7 +108,7 @@ export function contractFor(wallet) {
 /// error — inconsistently, not correlated with fee level (see PROJECT.md
 /// for the debugging trail). Identical retries have consistently succeeded
 /// within a couple attempts, so retry rather than chase a moving target.
-export async function sendTx(fn, { retries = 3, delayMs = 1200 } = {}) {
+export async function sendTx(fn, { retries = 6, delayMs = 1200 } = {}) {
   let lastErr;
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
