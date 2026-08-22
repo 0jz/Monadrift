@@ -9,9 +9,11 @@ const RPC_URL = process.env.RPC_URL || "https://testnet-rpc.monad.xyz";
 const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS;
 const FUNDER_PRIVATE_KEY = process.env.FUNDER_PRIVATE_KEY;
 const SESSION_FUND_AMOUNT = process.env.SESSION_FUND_AMOUNT || "0.01";
+const SESSION_SEED = process.env.SESSION_SEED || "insecure-dev-seed-change-me-in-production";
 
 if (!CONTRACT_ADDRESS) console.warn("[chain] CONTRACT_ADDRESS not set yet — deploy the contract and set it in backend/.env");
 if (!FUNDER_PRIVATE_KEY) console.warn("[chain] FUNDER_PRIVATE_KEY not set yet — sessions can't be funded until it is");
+if (!process.env.SESSION_SEED) console.warn("[chain] SESSION_SEED not set — using an insecure default. Set a real secret in production (see .env.example).");
 
 // ABI committed as a plain file inside backend/ (src/contract/Monadrift.abi.json)
 // rather than read from Foundry's out/ directory: out/ is gitignored and lives
@@ -74,7 +76,20 @@ export let readContract = contractAs(provider);
 // This is the fix for the "shared relayer can't represent multiple players" problem:
 // msg.sender must be distinct per player on-chain, so each session gets its own
 // ephemeral key, auto-funded from the funder wallet. The human never sees it.
+//
+// This Map is just an in-process cache, NOT the source of truth for who a
+// playerId is — the wallet itself is derived deterministically from
+// (SESSION_SEED, playerId) below, so any backend instance regenerates the
+// exact same address for the exact same playerId, restart or not. Without
+// this, every deploy silently reassigned everyone a new address, and
+// "You're not a participant in this race" started showing up for players
+// who'd registered before the most recent deploy.
 const sessions = new Map();
+
+function deriveWalletFor(playerId) {
+  const privateKey = ethers.keccak256(ethers.toUtf8Bytes(`${SESSION_SEED}:${playerId}`));
+  return new ethers.Wallet(privateKey, provider);
+}
 
 /// Recreates the provider (and everything bound to it) from scratch. Node's
 /// global fetch pools/reuses underlying connections; if Monad's RPC or an
@@ -99,28 +114,37 @@ export async function getOrCreateSession(playerId) {
   let wallet = sessions.get(playerId);
   if (wallet) return wallet;
 
-  wallet = ethers.Wallet.createRandom().connect(provider);
+  wallet = deriveWalletFor(playerId);
   sessions.set(playerId, wallet);
 
   if (funder) {
     const amount = ethers.parseEther(SESSION_FUND_AMOUNT);
-    await sendTx(() =>
-      funder.sendTransaction({
-        to: wallet.address,
-        value: amount,
-        ...TX_OVERRIDES,
-      })
-    );
-    // tx.wait() confirming doesn't guarantee every node behind this RPC
-    // endpoint has caught up yet — a spend attempted immediately after can
-    // hit a node that still sees the pre-funding balance and reject it.
-    // Poll until the funded balance is actually visible before handing
-    // the wallet back. This is very likely the real cause of the
-    // "insufficient balance on a well-funded wallet" failures seen so far.
-    for (let i = 0; i < 15; i++) {
-      const bal = await provider.getBalance(wallet.address);
-      if (bal >= amount) break;
-      await new Promise((r) => setTimeout(r, 400));
+    // The address is deterministic, so it may already be funded from
+    // before a restart (this Map is just a cache, not the source of
+    // truth). Only top up if it's actually running low — otherwise every
+    // restart would re-send funding to every player who'd ever played,
+    // burning the funder's balance for no reason.
+    const currentBalance = await provider.getBalance(wallet.address);
+    if (currentBalance < amount / 2n) {
+      await sendTx(() =>
+        funder.sendTransaction({
+          to: wallet.address,
+          value: amount,
+          ...TX_OVERRIDES,
+        })
+      );
+      // tx.wait() confirming doesn't guarantee every node behind this RPC
+      // endpoint has caught up yet — a spend attempted immediately after can
+      // hit a node that still sees the pre-funding balance and reject it.
+      // Poll until the funded balance is actually visible before handing
+      // the wallet back. Only needed when we actually just sent a funding
+      // tx — an already-funded wallet (the normal case after a restart)
+      // doesn't need to wait for anything.
+      for (let i = 0; i < 15; i++) {
+        const bal = await provider.getBalance(wallet.address);
+        if (bal >= amount) break;
+        await new Promise((r) => setTimeout(r, 400));
+      }
     }
   }
   return wallet;
