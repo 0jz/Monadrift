@@ -190,17 +190,19 @@ contract Monadrift {
         if (!inGracePeriod) {
             address priorClaimant = laneClaims[raceId][claimKey];
             if (priorClaimant != address(0) && priorClaimant != msg.sender) {
-                // collision: priorClaimant already holds this segment+lane
+                // Collision: priorClaimant already holds this segment+lane.
+                // No stake changes hands here anymore — losing a collision
+                // already costs you HP and, on a wreck, your progress back
+                // to the last checkpoint. Taking stake too was double
+                // punishment and the main way stake kept draining even
+                // while playing correctly (wrong-lane misses are the only
+                // remaining way to lose stake, and those are now avoidable
+                // since the correct lane is shown in the UI).
                 Player storage attacker = racePlayers[raceId][priorClaimant];
                 uint8 dmg = attacker.speed > 0 ? attacker.speed : 1;
                 _applyCollisionDamage(raceId, p, dmg);
 
-                uint256 penalty = COLLISION_PENALTY > p.stake ? p.stake : COLLISION_PENALTY;
-                p.stake -= penalty;
-                attacker.stake += penalty;
-
-                emit Collision(raceId, priorClaimant, msg.sender, dmg, penalty);
-                _checkBroke(raceId, p);
+                emit Collision(raceId, priorClaimant, msg.sender, dmg, 0);
                 return;
             }
             laneClaims[raceId][claimKey] = msg.sender;
