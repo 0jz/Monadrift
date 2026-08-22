@@ -13,7 +13,13 @@ contract Monadrift {
     uint16 public constant CHECKPOINT_INTERVAL = 10;
     uint8 public constant HP_MAX = 3;
     uint8 public constant MAX_SPEED = 3;
-    uint256 public constant MOVE_COST = 0.0001 ether;
+    // A correct move now REWARDS stake instead of costing it (players kept
+    // going broke just from playing correctly — MOVE_COST was charged on
+    // every move regardless of outcome). Funded from the shared pot
+    // (entry fees + accumulated penalties), capped so it can never
+    // underflow. Kept small: this is real prize money, and draining it too
+    // fast shrinks what's left for the top-3 payout at settle().
+    uint256 public constant MOVE_REWARD = 0.00002 ether;
     uint256 public constant COLLISION_PENALTY = 0.0005 ether;
     uint16 public constant FEE_BPS = 100; // 1% service fee — thin on purpose; revenue story is race frequency (agents racing 24/7), not per-race take
     uint16 public constant BPS_DENOM = 10000;
@@ -174,10 +180,6 @@ contract Monadrift {
         require(r.phase == RacePhase.RUNNING, "not running");
         Player storage p = racePlayers[raceId][msg.sender];
         require(p.addr != address(0) && p.alive && !p.finished, "not active");
-        require(p.stake >= MOVE_COST, "broke");
-
-        p.stake -= MOVE_COST;
-        r.pot += MOVE_COST; // fees from moving fund the winners' pool, not a black hole — see settle()
 
         uint16 nextSeg = p.position + 1;
         require(nextSeg <= SEGMENTS_TOTAL, "already finished");
@@ -213,12 +215,17 @@ contract Monadrift {
         if (wrongLane) {
             uint256 penalty = COLLISION_PENALTY > p.stake ? p.stake : COLLISION_PENALTY;
             p.stake -= penalty;
-            r.pot += penalty; // same reasoning as MOVE_COST above — a fee, not a transfer to another player
+            r.pot += penalty; // penalties fund the pool that pays MOVE_REWARD below
             p.speed = 0;
             _checkBroke(raceId, p);
             emit Moved(raceId, msg.sender, p.position, p.position, lane);
             return;
         }
+
+        // Correct move: reward, not charge. See MOVE_REWARD comment above.
+        uint256 reward = MOVE_REWARD > r.pot ? r.pot : MOVE_REWARD;
+        p.stake += reward;
+        r.pot -= reward;
 
         uint16 fromSeg = p.position;
         p.position = nextSeg;

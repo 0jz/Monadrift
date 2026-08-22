@@ -116,7 +116,7 @@
   },
   {
     "type": "function",
-    "name": "MOVE_COST",
+    "name": "MOVE_REWARD",
     "inputs": [],
     "outputs": [
       {
