@@ -13,14 +13,18 @@ const SESSION_FUND_AMOUNT = process.env.SESSION_FUND_AMOUNT || "0.01";
 if (!CONTRACT_ADDRESS) console.warn("[chain] CONTRACT_ADDRESS not set yet — deploy the contract and set it in backend/.env");
 if (!FUNDER_PRIVATE_KEY) console.warn("[chain] FUNDER_PRIVATE_KEY not set yet — sessions can't be funded until it is");
 
-// ABI loaded from Foundry's build output so it's always in sync with src/Monadrift.sol
-// after `forge build`. Run `forge build` from the repo root before starting the backend.
-const artifactPath = path.join(__dirname, "..", "..", "out", "Monadrift.sol", "Monadrift.json");
+// ABI committed as a plain file inside backend/ (src/contract/Monadrift.abi.json)
+// rather than read from Foundry's out/ directory: out/ is gitignored and lives
+// outside backend/, so it never made it into a `railway up` deploy — the
+// contract silently got an empty ABI, and every write call failed with
+// "<method> is not a function". Re-extract this file after any contract
+// change: `node -e "const fs=require('fs');fs.writeFileSync('backend/src/contract/Monadrift.abi.json',JSON.stringify(JSON.parse(fs.readFileSync('out/Monadrift.sol/Monadrift.json')).abi,null,2))"`
+const artifactPath = path.join(__dirname, "contract", "Monadrift.abi.json");
 let abi;
 try {
-  abi = JSON.parse(fs.readFileSync(artifactPath, "utf8")).abi;
+  abi = JSON.parse(fs.readFileSync(artifactPath, "utf8"));
 } catch {
-  console.warn(`[chain] Could not read ${artifactPath} — run "forge build" first. Falling back to empty ABI.`);
+  console.warn(`[chain] Could not read ${artifactPath} — see the comment above for how to regenerate it. Falling back to empty ABI.`);
   abi = [];
 }
 
