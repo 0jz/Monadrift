@@ -10,6 +10,12 @@ el("displayNameInput").addEventListener("input", (evt) => {
   el("playerPill").textContent = displayLabel();
 });
 
+el("switchIdentity").addEventListener("click", (evt) => {
+  evt.preventDefault();
+  clearIdentity();
+  location.href = "index.html";
+});
+
 let raceId = null;
 let lobbyType = null;
 let pollTimer = null;
@@ -57,6 +63,17 @@ async function pollState() {
   try {
     const state = await api(`/race/${raceId}/state`);
     el("waitingCount").textContent = `${state.players.length} joined`;
+
+    const list = el("waitingPlayers");
+    list.innerHTML = "";
+    for (const p of state.players) {
+      const li = document.createElement("li");
+      const isMe = p.address.toLowerCase() === (loadIdentity().address || "").toLowerCase();
+      li.textContent = `${shortAddress(p.address)}${isMe ? " (you)" : ""}`;
+      if (isMe) li.classList.add("me");
+      list.appendChild(li);
+    }
+
     if (state.phase === 2) {
       // RUNNING — everyone in the lobby (creator included) heads to the race.
       clearInterval(pollTimer);

@@ -5,11 +5,13 @@ const log = (msg) => {
   box.scrollTop = box.scrollHeight;
 };
 
-const { playerId, raceId } = loadSession();
+const { playerId, address, raceId } = loadSession();
 if (!playerId || !raceId) {
   location.href = "index.html";
 }
 el("playerPill").textContent = displayLabel();
+
+let isActivePlayer = false; // gates sendMove — see validateActivePlayer()
 
 let ws = null;
 
@@ -111,7 +113,7 @@ function connectStream() {
   ws.onmessage = (evt) => {
     const msg = JSON.parse(evt.data);
     if (msg.type === "started") {
-      hideWaiting();
+      if (isActivePlayer) hideWaiting();
       return;
     }
     if (msg.type === "move" && msg.playerId === playerId) {
@@ -131,6 +133,7 @@ function connectStream() {
 }
 
 async function sendMove(direction, button) {
+  if (!isActivePlayer) return; // validateActivePlayer() already explained why, in the log
   button?.classList.add("pressed");
   setTimeout(() => button?.classList.remove("pressed"), 120);
   try {
@@ -140,6 +143,33 @@ async function sendMove(direction, button) {
     });
   } catch (err) {
     log(`Move failed: ${err.message}`);
+  }
+}
+
+/// Confirms this browser session is actually a live, alive participant in
+/// `raceId` before letting it attempt moves. Without this, a stale raceId
+/// left over from an earlier session (e.g. a join that ultimately failed
+/// after this page already navigated here) just silently retries a doomed
+/// "not active" contract revert on every keypress.
+async function validateActivePlayer() {
+  try {
+    const state = await api(`/race/${raceId}/state`);
+    const me = state.players.find((p) => p.address.toLowerCase() === address?.toLowerCase());
+    if (!me || !me.alive) {
+      isActivePlayer = false;
+      document.body.classList.add("race-waiting");
+      log(!me ? "You're not a participant in this race (stale link?)." : "You're no longer active in this race — out of stake.");
+      const back = document.createElement("button");
+      back.textContent = "Back to lobby";
+      back.onclick = () => (location.href = "lobby.html");
+      el("log").after(back);
+      return false;
+    }
+    isActivePlayer = true;
+    return true;
+  } catch (err) {
+    log(`Couldn't verify race participation: ${err.message}`);
+    return false;
   }
 }
 
@@ -172,6 +202,7 @@ function hideWaiting() {
 }
 
 async function checkPhaseAndInit() {
+  if (!(await validateActivePlayer())) return;
   const state = await api(`/race/${raceId}/state`);
   if (state.phase !== 2) {
     showWaiting();

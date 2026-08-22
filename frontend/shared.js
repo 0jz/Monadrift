@@ -11,18 +11,20 @@ async function api(path, opts) {
   return body;
 }
 
-// Identity: set once at registration (index.html), persists across lobby
-// selection and into the race — this is "who you are", separate from
-// "which race you're currently in".
+// Identity: set once at registration (index.html). Uses localStorage, not
+// sessionStorage, so returning later (new tab, browser restart) doesn't
+// force re-registering — the whole point of "remembers me". Race progress
+// (below) stays in sessionStorage on purpose: a race is ephemeral, your
+// identity isn't.
 function saveIdentity(playerId, address) {
-  sessionStorage.setItem("monadrift.playerId", playerId);
-  sessionStorage.setItem("monadrift.address", address);
+  localStorage.setItem("monadrift.playerId", playerId);
+  localStorage.setItem("monadrift.address", address);
 }
 
 function loadIdentity() {
   return {
-    playerId: sessionStorage.getItem("monadrift.playerId"),
-    address: sessionStorage.getItem("monadrift.address"),
+    playerId: localStorage.getItem("monadrift.playerId"),
+    address: localStorage.getItem("monadrift.address"),
   };
 }
 
@@ -42,10 +44,17 @@ function loadSession() {
 // Local to this browser session — it's a label, not part of the on-chain
 // identity, so it's never sent to the backend or other players.
 function saveDisplayName(name) {
-  sessionStorage.setItem("monadrift.displayName", name);
+  localStorage.setItem("monadrift.displayName", name);
 }
 function loadDisplayName() {
-  return sessionStorage.getItem("monadrift.displayName") || "";
+  return localStorage.getItem("monadrift.displayName") || "";
+}
+
+function clearIdentity() {
+  localStorage.removeItem("monadrift.playerId");
+  localStorage.removeItem("monadrift.address");
+  localStorage.removeItem("monadrift.displayName");
+  sessionStorage.removeItem("monadrift.raceId");
 }
 
 function shortAddress(address) {

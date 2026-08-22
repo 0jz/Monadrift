@@ -14,7 +14,10 @@
       <div class="brand-mark"></div>
       <h1>Mona<span class="rift">drift</span></h1>
     </div>
-    <span class="player-tag mono" id="playerPill">—</span>
+    <div class="header-right">
+      <span class="player-tag mono" id="playerPill">—</span>
+      <a href="#" id="switchIdentity" class="switch-identity">switch</a>
+    </div>
   </header>
 
   <div class="card display-name-card">
@@ -45,6 +48,7 @@
     </div>
     <img id="qrImage" class="qr" alt="Scan to join this lobby" />
     <p class="join-blurb">Scan to join race <span class="mono" id="waitingRaceId">—</span>.</p>
+    <ul id="waitingPlayers" class="waiting-players"></ul>
     <button id="startBtn" class="hidden">Start race</button>
     <p id="waitingStatus" class="join-status"></p>
   </div>
