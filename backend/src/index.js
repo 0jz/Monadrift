@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
 import QRCode from "qrcode";
 import crypto from "node:crypto";
-import { readContract, getOrCreateSession, contractFor, provider, funder, TX_OVERRIDES, sendTx } from "./chain.js";
+import { readContract, getOrCreateSession, contractFor, provider, funder, TX_OVERRIDES, sendTx, retryRpc } from "./chain.js";
 
 // A single unexpected RPC error (rate limit, transient network blip, an
 // ethers internal poll rejecting outside the normal call chain) previously
@@ -163,20 +163,20 @@ app.post("/lobby/quickmatch", async (req, res) => {
       // GET /lobby/:id/qr or POST /lobby/showcase) already decided who's
       // allowed to scan it; SHOWCASE_MIXED is reachable this way on purpose.
       raceId = lobby;
-      const phase = await readContract.getPhase(raceId);
+      const phase = await retryRpc(() => readContract.getPhase(raceId));
       if (Number(phase) !== 0) {
         return res.status(409).json({ error: "lobby is no longer open" });
       }
       const meta = lobbyMeta.get(raceId);
       if (meta?.type === "duel") {
-        const current = await readContract.getPlayers(raceId);
+        const current = await retryRpc(() => readContract.getPlayers(raceId));
         if (current.length >= DUEL_MAX_PLAYERS) {
           return res.status(409).json({ error: "duel lobby is full" });
         }
       }
       // Trust the chain for the required fee, not the client-supplied one —
       // a specific lobby was already created with its own entryFee.
-      feeWei = await readContract.getEntryFee(raceId);
+      feeWei = await retryRpc(() => readContract.getEntryFee(raceId));
     } else {
       if (mode === "SHOWCASE_MIXED") {
         return res.status(403).json({ error: "SHOWCASE_MIXED lobbies are operator-only, not reachable via quickmatch — see PROJECT.md §11" });
@@ -199,7 +199,7 @@ app.post("/lobby/quickmatch", async (req, res) => {
 
     const meta = lobbyMeta.get(raceId);
     if (meta?.type === "duel") {
-      const current = await readContract.getPlayers(raceId);
+      const current = await retryRpc(() => readContract.getPlayers(raceId));
       if (current.length >= DUEL_MAX_PLAYERS) {
         startRace(raceId).catch((err) => console.error(`[start] duel ${raceId} failed to auto-start:`, err));
       }
@@ -239,12 +239,12 @@ app.get("/lobby/:id/qr", async (req, res) => {
 app.get("/race/:id/state", async (req, res) => {
   try {
     const raceId = req.params.id;
-    const phase = await readContract.getPhase(raceId);
-    const addrs = await readContract.getPlayers(raceId);
-    const pot = await readContract.getPot(raceId);
+    const phase = await retryRpc(() => readContract.getPhase(raceId));
+    const addrs = await retryRpc(() => readContract.getPlayers(raceId));
+    const pot = await retryRpc(() => readContract.getPot(raceId));
     const players = await Promise.all(
       addrs.map(async (a) => {
-        const p = await readContract.getPlayer(raceId, a);
+        const p = await retryRpc(() => readContract.getPlayer(raceId, a));
         return {
           address: a,
           stake: p.stake.toString(),
@@ -274,18 +274,18 @@ app.get("/race/:id/segment/:i", async (req, res) => {
     if (!playerId) return res.status(400).json({ error: "playerId query param required" });
 
     const wallet = await getOrCreateSession(playerId);
-    const p = await readContract.getPlayer(raceId, wallet.address);
+    const p = await retryRpc(() => readContract.getPlayer(raceId, wallet.address));
     if (i > Number(p.position) + 1) {
       return res.status(403).json({ error: "segment not revealed yet" });
     }
 
-    const seed = await readContract.getSeed(raceId);
-    const segType = await readContract.segmentAt(seed, i);
-    const isCheckpoint = await readContract.isCheckpoint(i);
+    const seed = await retryRpc(() => readContract.getSeed(raceId));
+    const segType = await retryRpc(() => readContract.segmentAt(seed, i));
+    const isCheckpoint = await retryRpc(() => readContract.isCheckpoint(i));
     let correctLane = null;
     if (Number(segType) === 1 || Number(segType) === 2) {
       // TURN or OBSTACLE — only these have a meaningful "correct" lane
-      correctLane = LANES[Number(await readContract.correctLaneAt(seed, i))];
+      correctLane = LANES[Number(await retryRpc(() => readContract.correctLaneAt(seed, i)))];
     }
     res.json({ index: i, type: ["STRAIGHT", "TURN", "OBSTACLE", "BOOST"][Number(segType)], correctLane, isCheckpoint });
   } catch (err) {
@@ -307,7 +307,7 @@ app.post("/race/:id/move", async (req, res) => {
     const receipt = await sendTx(() => c.chooseLane(raceId, laneIdx, TX_OVERRIDES));
     const latencyMs = Date.now() - started;
 
-    const p = await readContract.getPlayer(raceId, wallet.address);
+    const p = await retryRpc(() => readContract.getPlayer(raceId, wallet.address));
     const payload = {
       type: "move",
       playerId,

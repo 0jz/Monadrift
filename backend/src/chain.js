@@ -32,9 +32,25 @@ export const funder = FUNDER_PRIVATE_KEY ? new ethers.Wallet(FUNDER_PRIVATE_KEY,
 // this alone did NOT reliably fix testnet's flaky mempool admission
 // (higher and lower values both failed inconsistently), so the real fix
 // is retrying, not a specific fee number.
+//
+// gasLimit is set explicitly for the same reason: without it, ethers
+// calls eth_estimateGas as a *separate* RPC round-trip before every write.
+// If that specific call hits a flaky/rate-limited RPC response, ethers
+// can't decode a revert reason and throws "missing revert data" — even
+// though the actual transaction might have been perfectly valid. All our
+// writes are cheap (~130k gas observed for join()); 1,000,000 is a generous
+// fixed cap, well under what a player could ever be charged for actual
+// gas used (you only pay for gas actually consumed), and it removes the
+// estimateGas call from the picture entirely. Don't set this near the
+// 32-bit max or anything huge: Monad's mempool admission reserves
+// gasLimit * maxFeePerGas against the sender's balance just to accept the
+// tx (see SESSION_FUND_AMOUNT in .env) — an oversized gasLimit forces
+// proportionally oversized session funding for no real benefit, and risks
+// exceeding the chain's actual per-block gas limit outright.
 export const TX_OVERRIDES = {
   maxFeePerGas: ethers.parseUnits("210", "gwei"),
   maxPriorityFeePerGas: ethers.parseUnits("5", "gwei"),
+  gasLimit: 1000000n,
 };
 
 function contractAs(signerOrProvider) {
@@ -98,6 +114,23 @@ export async function sendTx(fn, { retries = 3, delayMs = 1200 } = {}) {
     try {
       const tx = await fn();
       return await tx.wait();
+    } catch (err) {
+      lastErr = err;
+      if (attempt < retries - 1) await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
+  throw lastErr;
+}
+
+/// Same reasoning as sendTx, for plain read (view) calls — /race/:id/state
+/// and /race/:id/segment/:i make several of these per request, and none of
+/// them were retried before, so a single flaky RPC response turned into a
+/// 500 for the whole endpoint.
+export async function retryRpc(fn, { retries = 3, delayMs = 500 } = {}) {
+  let lastErr;
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      return await fn();
     } catch (err) {
       lastErr = err;
       if (attempt < retries - 1) await new Promise((r) => setTimeout(r, delayMs));
