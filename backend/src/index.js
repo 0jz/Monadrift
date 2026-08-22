@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
+import rateLimit from "express-rate-limit";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
@@ -28,6 +29,31 @@ app.use(express.static(path.join(__dirname, "..", "..", "frontend")));
 const PORT = process.env.PORT || 8787;
 const LANES = ["LEFT", "CENTER", "RIGHT"];
 const DUEL_MAX_PLAYERS = 2;
+
+// The funder wallet pays real (test)MON per new session — a public URL
+// with no auth on /session/register is otherwise a straightforward drain
+// vector once it's reachable off localhost (e.g. tunneled for Vercel).
+// New playerIds only: an existing session's repeat registration is free
+// (getOrCreateSession just returns the cached wallet), so this only
+// throttles actual new-wallet funding, not normal reconnects.
+const registerLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 12,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many new sessions from this IP — try again shortly." },
+});
+// Looser general limiter on every other route as defense-in-depth.
+const generalLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Rate limit exceeded — slow down." },
+});
+app.use("/session", generalLimiter);
+app.use("/lobby", generalLimiter);
+app.use("/race", generalLimiter);
 
 // mode -> open raceId waiting for players (in-memory matchmaking; the
 // contract itself doesn't track "open" lobbies, this is just routing)
@@ -66,7 +92,7 @@ async function startRace(raceId) {
 
 // --- lobby / matchmaking ---
 
-app.post("/session/register", async (req, res) => {
+app.post("/session/register", registerLimiter, async (req, res) => {
   try {
     // playerId can be a self-chosen address/handle, or omitted entirely —
     // "wallets or generated" per PROJECT.md. It's a lookup key for the

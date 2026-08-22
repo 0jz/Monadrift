@@ -1,11 +1,23 @@
 // Shared between index.html (join) and race.html (gameplay) — no bundler,
 // so this is just a plain script both pages include. See PROJECT.md §8.
 
-const API = location.origin; // backend serves these pages too, see backend/src/index.js static mount
+// Locally, the backend serves these pages itself (same origin). Deployed
+// to Vercel, there's no backend at that origin at all — this points the
+// deployed frontend at the backend's public tunnel instead. Update
+// TUNNEL_BACKEND whenever the tunnel restarts (its URL isn't stable).
+const LOCAL_HOSTS = ["localhost", "127.0.0.1"];
+const TUNNEL_BACKEND = "https://good-bushes-lie.loca.lt";
+const API = LOCAL_HOSTS.includes(location.hostname) ? location.origin : TUNNEL_BACKEND;
 const WS_BASE = API.replace(/^http/, "ws");
 
 async function api(path, opts) {
-  const res = await fetch(`${API}${path}`, { headers: { "Content-Type": "application/json" }, ...opts });
+  const res = await fetch(`${API}${path}`, {
+    headers: {
+      "Content-Type": "application/json",
+      "bypass-tunnel-reminder": "true", // avoids localtunnel's interstitial warning page on first visit
+    },
+    ...opts,
+  });
   const body = await res.json();
   if (!res.ok) throw new Error(body.error || res.statusText);
   return body;
