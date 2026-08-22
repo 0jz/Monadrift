@@ -28,7 +28,10 @@ export const provider = new ethers.JsonRpcProvider(RPC_URL);
 export const funder = FUNDER_PRIVATE_KEY ? new ethers.Wallet(FUNDER_PRIVATE_KEY, provider) : null;
 
 function contractAs(signerOrProvider) {
-  return new ethers.Contract(CONTRACT_ADDRESS, abi, signerOrProvider);
+  // Falls back to the zero address so the server can boot (and serve the
+  // static frontend) before a contract is deployed — any actual on-chain
+  // call will just fail with a clear error instead of crashing at startup.
+  return new ethers.Contract(CONTRACT_ADDRESS || ethers.ZeroAddress, abi, signerOrProvider);
 }
 
 export const readContract = contractAs(provider);

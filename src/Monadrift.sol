@@ -289,4 +289,12 @@ contract Monadrift {
     function getPot(uint256 raceId) external view returns (uint256) {
         return races[raceId].pot;
     }
+
+    function getEntryFee(uint256 raceId) external view returns (uint256) {
+        return races[raceId].entryFee;
+    }
+
+    function getMode(uint256 raceId) external view returns (LobbyMode) {
+        return races[raceId].mode;
+    }
 }

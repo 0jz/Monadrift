@@ -36,27 +36,43 @@ function broadcast(raceId, payload) {
 
 app.post("/lobby/quickmatch", async (req, res) => {
   try {
-    const { playerId, mode = "HUMAN_ONLY", entryFee = DEFAULT_ENTRY_FEE } = req.body;
+    const { playerId, mode = "HUMAN_ONLY", entryFee = DEFAULT_ENTRY_FEE, lobby } = req.body;
     if (!playerId) return res.status(400).json({ error: "playerId required" });
-    if (mode === "SHOWCASE_MIXED") {
-      return res.status(403).json({ error: "SHOWCASE_MIXED lobbies are operator-only, not reachable via quickmatch — see PROJECT.md §11" });
-    }
 
     const wallet = await getOrCreateSession(playerId);
     const { ethers } = await import("ethers");
-    const feeWei = ethers.parseEther(String(entryFee));
+    const c = contractFor(wallet);
 
-    let raceId = openLobbies[mode];
-    if (raceId === null) {
-      const c = contractFor(wallet);
-      const modeIdx = mode === "AGENT_ONLY" ? 1 : 0;
-      const tx = await c.createLobby(modeIdx, feeWei);
-      const receipt = await tx.wait();
-      raceId = readContract.interface.parseLog(receipt.logs[0]).args.raceId.toString();
-      openLobbies[mode] = raceId;
+    let raceId, feeWei;
+
+    if (lobby) {
+      // Joining a specific lobby via its QR code (PROJECT.md §10) — bypasses
+      // mode-pool matchmaking entirely. Whoever generated this QR (via
+      // GET /lobby/:id/qr or POST /lobby/showcase) already decided who's
+      // allowed to scan it; SHOWCASE_MIXED is reachable this way on purpose.
+      raceId = lobby;
+      const phase = await readContract.getPhase(raceId);
+      if (Number(phase) !== 0) {
+        return res.status(409).json({ error: "lobby is no longer open" });
+      }
+      // Trust the chain for the required fee, not the client-supplied one —
+      // a specific lobby was already created with its own entryFee.
+      feeWei = await readContract.getEntryFee(raceId);
+    } else {
+      if (mode === "SHOWCASE_MIXED") {
+        return res.status(403).json({ error: "SHOWCASE_MIXED lobbies are operator-only, not reachable via quickmatch — see PROJECT.md §11" });
+      }
+      feeWei = ethers.parseEther(String(entryFee));
+      raceId = openLobbies[mode];
+      if (raceId === null) {
+        const modeIdx = mode === "AGENT_ONLY" ? 1 : 0;
+        const tx = await c.createLobby(modeIdx, feeWei);
+        const receipt = await tx.wait();
+        raceId = readContract.interface.parseLog(receipt.logs[0]).args.raceId.toString();
+        openLobbies[mode] = raceId;
+      }
     }
 
-    const c = contractFor(wallet);
     const joinTx = await c.join(raceId, { value: feeWei });
     await joinTx.wait();
 
