@@ -5,55 +5,142 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Monadrift</title>
 <style>
-  :root { color-scheme: dark; }
-  body { margin: 0; background: #0b0d14; color: #eaeaf0; font-family: system-ui, sans-serif; }
-  header { padding: 12px 16px; display: flex; justify-content: space-between; align-items: baseline; }
-  header h1 { font-size: 18px; margin: 0; }
-  header .tag { font-size: 12px; color: #7a7f95; }
-  #track { display: block; width: 100%; height: 60vh; background: #111420; }
-  #hud { display: flex; gap: 16px; padding: 10px 16px; font-size: 14px; flex-wrap: wrap; }
-  #hud span b { color: #8be9fd; }
-  #lanes { display: flex; gap: 10px; padding: 16px; }
-  #lanes button {
-    flex: 1; padding: 22px 0; font-size: 18px; font-weight: 600;
-    background: #1c2030; color: #eaeaf0; border: 1px solid #2e3350; border-radius: 10px;
+  :root {
+    color-scheme: dark;
+    --bg: #0a0b10;
+    --panel: #12131c;
+    --panel-2: #171926;
+    --border: #24263a;
+    --text: #eef0fa;
+    --text-dim: #8b8fa8;
+    --accent: #7c5cff;
+    --accent-2: #43e0c9;
+    --danger: #ff5c7a;
+    --warn: #ffb85c;
+    --radius: 14px;
   }
-  #lanes button:active { background: #2e3350; }
-  #log { padding: 8px 16px; font-size: 12px; color: #7a7f95; max-height: 18vh; overflow-y: auto; white-space: pre-wrap; }
-  #join { padding: 16px; display: flex; gap: 8px; flex-wrap: wrap; }
-  #join input, #join select { padding: 8px; border-radius: 6px; border: 1px solid #2e3350; background: #1c2030; color: #eaeaf0; }
-  #join button { padding: 8px 14px; border-radius: 6px; border: none; background: #8be9fd; color: #0b0d14; font-weight: 700; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background:
+      radial-gradient(1200px 600px at 15% -10%, rgba(124, 92, 255, 0.14), transparent 60%),
+      radial-gradient(900px 500px at 100% 0%, rgba(67, 224, 201, 0.10), transparent 55%),
+      var(--bg);
+    color: var(--text);
+    font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .shell { max-width: 860px; margin: 0 auto; padding: 20px 16px 40px; }
+
+  header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand-mark {
+    width: 30px; height: 30px; border-radius: 9px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  }
+  .brand h1 { font-size: 17px; font-weight: 650; letter-spacing: -0.01em; margin: 0; }
+  .net-pill {
+    font-size: 11px; font-weight: 600; letter-spacing: 0.02em; color: var(--accent-2);
+    background: rgba(67, 224, 201, 0.10); border: 1px solid rgba(67, 224, 201, 0.25);
+    padding: 4px 10px; border-radius: 999px;
+  }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 14px;
+  }
+
+  #join { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  #join input, #join select {
+    flex: 1; min-width: 140px; padding: 11px 12px; border-radius: 10px;
+    border: 1px solid var(--border); background: var(--panel-2); color: var(--text);
+    font-size: 14px; outline: none;
+  }
+  #join input:focus, #join select:focus { border-color: var(--accent); }
+  #join button {
+    padding: 11px 18px; border-radius: 10px; border: none; cursor: pointer;
+    background: linear-gradient(135deg, var(--accent), #6a4ce0); color: white;
+    font-weight: 600; font-size: 14px; transition: transform 0.08s ease, opacity 0.15s ease;
+  }
+  #join button:hover { opacity: 0.92; }
+  #join button:active { transform: scale(0.97); }
+
+  #track-wrap { padding: 0; overflow: hidden; }
+  #track { display: block; width: 100%; height: 42vh; min-height: 220px; }
+
+  #hud { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; }
+  .stat { background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+  .stat-label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 3px; }
+  .stat-value { font-size: 18px; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .stat-value.hp { color: var(--danger); }
+  .stat-value.speed { color: var(--warn); }
+  .stat-value.stake { color: var(--accent-2); }
+
+  #lanes { display: flex; gap: 10px; }
+  #lanes button {
+    flex: 1; padding: 20px 0; border-radius: 12px; border: 1px solid var(--border);
+    background: var(--panel-2); color: var(--text); cursor: pointer;
+    font-size: 15px; font-weight: 600; letter-spacing: 0.01em;
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    transition: background 0.1s ease, transform 0.06s ease, border-color 0.1s ease;
+  }
+  #lanes button .glyph { font-size: 20px; }
+  #lanes button .key { font-size: 10px; color: var(--text-dim); font-weight: 500; }
+  #lanes button:hover { border-color: var(--accent); }
+  #lanes button:active, #lanes button.pressed { background: rgba(124, 92, 255, 0.18); border-color: var(--accent); transform: scale(0.97); }
+
+  #log {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    font-size: 12px; line-height: 1.6; color: var(--text-dim);
+    max-height: 160px; overflow-y: auto; white-space: pre-wrap;
+  }
+  #log:empty::before { content: "waiting for race activity…"; opacity: 0.5; }
+
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 8px; }
 </style>
 </head>
 <body>
-<header>
-  <h1>Monadrift</h1>
-  <span class="tag">600ms or it didn't happen.</span>
-</header>
+<div class="shell">
+  <header>
+    <div class="brand">
+      <div class="brand-mark"></div>
+      <h1>Monadrift</h1>
+    </div>
+    <span class="net-pill">Monad Testnet</span>
+  </header>
 
-<div id="join">
-  <input id="playerId" placeholder="your name" />
-  <select id="mode"><option value="HUMAN_ONLY">Human lobby</option></select>
-  <button id="joinBtn">Join race</button>
+  <div class="card" id="join">
+    <input id="playerId" placeholder="your name" />
+    <select id="mode"><option value="HUMAN_ONLY">Human lobby</option></select>
+    <button id="joinBtn">Join race</button>
+  </div>
+
+  <div class="card" id="track-wrap">
+    <canvas id="track" width="1000" height="300"></canvas>
+  </div>
+
+  <div class="card" id="hud">
+    <div class="stat"><div class="stat-label">Position</div><div class="stat-value" id="hudPos">—</div></div>
+    <div class="stat"><div class="stat-label">HP</div><div class="stat-value hp" id="hudHp">—</div></div>
+    <div class="stat"><div class="stat-label">Speed</div><div class="stat-value speed" id="hudSpeed">—</div></div>
+    <div class="stat"><div class="stat-label">Stake</div><div class="stat-value stake" id="hudStake">—</div></div>
+    <div class="stat"><div class="stat-label">Last move</div><div class="stat-value" id="hudLatency">—</div></div>
+  </div>
+
+  <div class="card" id="lanes">
+    <button data-lane="LEFT"><span class="glyph">◀</span>Left<span class="key">←</span></button>
+    <button data-lane="CENTER"><span class="glyph">▲</span>Center<span class="key">↑ / ↓</span></button>
+    <button data-lane="RIGHT"><span class="glyph">▶</span>Right<span class="key">→</span></button>
+  </div>
+
+  <div class="card" id="log"></div>
 </div>
-
-<canvas id="track" width="1000" height="300"></canvas>
-
-<div id="hud">
-  <span>Position: <b id="hudPos">-</b></span>
-  <span>HP: <b id="hudHp">-</b></span>
-  <span>Speed: <b id="hudSpeed">-</b></span>
-  <span>Stake: <b id="hudStake">-</b></span>
-  <span>Last move: <b id="hudLatency">-</b></span>
-</div>
-
-<div id="lanes">
-  <button data-lane="LEFT">◀ LEFT</button>
-  <button data-lane="CENTER">■ CENTER</button>
-  <button data-lane="RIGHT">RIGHT ▶</button>
-</div>
-
-<div id="log"></div>
 
 <script src="app.js"></script>
 </body>

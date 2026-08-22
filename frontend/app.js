@@ -19,23 +19,46 @@ let raceId = presetLobby || null;
 let playerId = null;
 let ws = null;
 
-const SEGMENT_COLORS = { STRAIGHT: "#2e3350", TURN: "#8be9fd", OBSTACLE: "#ff6188", BOOST: "#a9dc76" };
+const SEGMENT_COLORS = {
+  STRAIGHT: "#2e3350",
+  TURN: "#7c5cff",
+  OBSTACLE: "#ff5c7a",
+  BOOST: "#43e0c9",
+};
 let knownSegments = []; // sparse, filled in as revealed
 let myPosition = 0;
 
+const canvas = el("track");
+const ctx = canvas.getContext("2d");
+
+function resizeCanvas() {
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  drawTrack();
+}
+window.addEventListener("resize", resizeCanvas);
+
 function drawTrack() {
-  const canvas = el("track");
-  const ctx = canvas.getContext("2d");
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
+  ctx.clearRect(0, 0, w, h);
 
-  const tileW = 60, tileH = 30;
-  const originX = 40, originY = canvas.height / 2;
+  const tileW = Math.max(46, Math.min(72, w / 15));
+  const tileH = tileW * 0.55;
+  const originX = tileW * 0.7;
+  const originY = h / 2;
+  const laneWobble = tileH * 0.18;
   const visibleFrom = Math.max(0, myPosition - 2);
+  const count = Math.ceil(w / (tileW * 0.66)) + 2;
 
-  for (let i = visibleFrom; i < visibleFrom + 14; i++) {
+  for (let i = visibleFrom; i < visibleFrom + count; i++) {
     const seg = knownSegments[i];
-    const x = originX + (i - visibleFrom) * (tileW * 0.65);
-    const y = originY + ((i % 2 === 0) ? -tileH * 0.15 : tileH * 0.15); // slight iso wobble
+    const x = originX + (i - visibleFrom) * (tileW * 0.66);
+    const y = originY + (i % 2 === 0 ? -laneWobble : laneWobble);
+
     ctx.save();
     ctx.translate(x, y);
     ctx.beginPath();
@@ -44,20 +67,39 @@ function drawTrack() {
     ctx.lineTo(0, tileH / 2);
     ctx.lineTo(-tileW / 2, 0);
     ctx.closePath();
-    ctx.fillStyle = seg ? SEGMENT_COLORS[seg.type] : "#1c2030";
+
+    if (seg) {
+      ctx.fillStyle = SEGMENT_COLORS[seg.type];
+      ctx.shadowColor = SEGMENT_COLORS[seg.type];
+      ctx.shadowBlur = 14;
+    } else {
+      ctx.fillStyle = "#171926";
+      ctx.shadowBlur = 0;
+    }
     ctx.fill();
+    ctx.shadowBlur = 0;
     ctx.strokeStyle = "#05060a";
+    ctx.lineWidth = 1;
     ctx.stroke();
+
+    if (seg?.isCheckpoint) {
+      ctx.beginPath();
+      ctx.arc(0, 0, tileH * 0.14, 0, Math.PI * 2);
+      ctx.strokeStyle = "#eef0fa";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
     if (i === myPosition) {
       ctx.beginPath();
-      ctx.arc(0, 0, 6, 0, Math.PI * 2);
-      ctx.fillStyle = "#eaeaf0";
+      ctx.arc(0, 0, tileH * 0.2, 0, Math.PI * 2);
+      ctx.fillStyle = "#eef0fa";
       ctx.fill();
     }
+
     ctx.restore();
   }
 }
-drawTrack();
 
 async function api(path, opts) {
   const res = await fetch(`${API}${path}`, { headers: { "Content-Type": "application/json" }, ...opts });
@@ -89,6 +131,7 @@ function connectStream() {
       el("hudStake").textContent = msg.stake;
       el("hudLatency").textContent = `${msg.latencyMs}ms`;
       revealNext();
+      drawTrack();
     }
     if (msg.type === "move") {
       log(`${msg.playerId} -> segment ${msg.position} (${msg.latencyMs}ms)`);
@@ -100,10 +143,6 @@ el("joinBtn").onclick = async () => {
   playerId = el("playerId").value.trim() || `player-${Math.random().toString(36).slice(2, 6)}`;
   const mode = el("mode").value;
   try {
-    if (raceId) {
-      // joining a specific lobby via QR (?lobby=) still goes through quickmatch
-      // for now — a dedicated /lobby/:id/join endpoint is a natural next step.
-    }
     const result = await api("/lobby/quickmatch", { method: "POST", body: JSON.stringify({ playerId, mode }) });
     raceId = result.raceId;
     log(`Joined race ${raceId} as ${playerId} (${result.playerAddress})`);
@@ -114,16 +153,38 @@ el("joinBtn").onclick = async () => {
   }
 };
 
-document.querySelectorAll("#lanes button").forEach((btn) => {
-  btn.onclick = async () => {
-    if (!raceId || !playerId) return log("Join a race first.");
-    try {
-      await api(`/race/${raceId}/move`, {
-        method: "POST",
-        body: JSON.stringify({ playerId, direction: btn.dataset.lane }),
-      });
-    } catch (err) {
-      log(`Move failed: ${err.message}`);
-    }
-  };
+async function sendMove(direction, button) {
+  if (!raceId || !playerId) return log("Join a race first.");
+  button?.classList.add("pressed");
+  setTimeout(() => button?.classList.remove("pressed"), 120);
+  try {
+    await api(`/race/${raceId}/move`, {
+      method: "POST",
+      body: JSON.stringify({ playerId, direction }),
+    });
+  } catch (err) {
+    log(`Move failed: ${err.message}`);
+  }
+}
+
+const laneButtons = document.querySelectorAll("#lanes button");
+laneButtons.forEach((btn) => {
+  btn.onclick = () => sendMove(btn.dataset.lane, btn);
 });
+
+const KEY_TO_LANE = {
+  ArrowLeft: "LEFT",
+  ArrowRight: "RIGHT",
+  ArrowUp: "CENTER",
+  ArrowDown: "CENTER",
+};
+
+window.addEventListener("keydown", (evt) => {
+  const lane = KEY_TO_LANE[evt.key];
+  if (!lane) return;
+  evt.preventDefault(); // don't scroll the page on arrow keys
+  const button = [...laneButtons].find((b) => b.dataset.lane === lane);
+  sendMove(lane, button);
+});
+
+resizeCanvas();

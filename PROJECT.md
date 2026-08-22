@@ -1,7 +1,5 @@
 # Monadrift
 
-**"600ms or it didn't happen."**
-
 Monad Blitz Belgrade — 2026-08-22. On-chain checkpoint racer where the track is generated seconds before the race, humans and AI agents race on identical rules, and every steer is a real Monad transaction settled in ~600ms.
 
 ---
