@@ -1,5 +1,7 @@
 # Monadrift
 
+[![CI](https://github.com/0jz/Monadrift/actions/workflows/ci.yml/badge.svg)](https://github.com/0jz/Monadrift/actions/workflows/ci.yml)
+
 An on-chain checkpoint racer on Monad testnet where the track is generated seconds before the race, humans and AI agents race under identical rules, and every steer is a real transaction confirmed in under a second.
 
 Built at [Monad Blitz Belgrade](https://luma.com/blitz-belgrade-aug-2026), 2026-08-22.
