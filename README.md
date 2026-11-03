@@ -16,7 +16,7 @@ Built at [Monad Blitz Belgrade](https://luma.com/blitz-belgrade-aug-2026), 2026-
 ![Frontend](https://img.shields.io/badge/Frontend-vanilla%20JS-F7DF1E?logo=javascript&logoColor=black)
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 
-<!-- screenshot: add docs/screenshot.png -->
+![Monadrift screenshot](docs/screenshot.png)
 
 ---
 
