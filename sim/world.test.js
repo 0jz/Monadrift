@@ -227,4 +227,4 @@ test("verifyReplay accepts an honest replay and rejects forged checkpoints or ra
   assert.equal(verifyReplay({ ...replay, trackVersion: 99 }).ok, false);
 });
 
-const GOLDEN4 = { finalHash: "0xe1cb78438b5296c535283b3593a466b9258d252dba865d3d0cdf91e7d758f902", ranking: [0, 1, 3, 2] };
+const GOLDEN4 = { finalHash: "0xf9d1f159a7a382c73dc6e4fed338e09ee7946b9a05165a1fc5de0094c6d98b06", ranking: [0, 1, 3, 2] };

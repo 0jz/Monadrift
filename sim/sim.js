@@ -21,8 +21,8 @@ export const CORNER_STEP = 12000; // safe speed drops this much per curvature le
 export const STEER_ACCEL = 80; // mm/tick lateral velocity per tick
 export const STEER_FULL_SPEED = 30000; // below this speed steering is weaker
 export const STEER_MIN_SPEED = 24000; // steering never weaker than this speed gives, so a slow car can always turn off a wall
-export const DRIFT_DIV = 360; // road bends away: drift = -k*v / DRIFT_DIV
-export const GRIP_DIV = 20; // extra outward slide when over the safe speed
+export const DRIFT_DIV = 600; // road bends away: drift = -k*v / DRIFT_DIV
+export const GRIP_DIV = 40; // extra outward slide when over the safe speed
 export const WALL_SPEED_PCT = 70; // speed kept after touching a wall
 export const WALL_SLIDE_PCT = 97; // speed kept per tick while sliding along a wall
 export const WALL_SCRAPE = 40; // mm past the wall below which contact costs no speed
