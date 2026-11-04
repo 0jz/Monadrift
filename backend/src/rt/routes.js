@@ -6,7 +6,9 @@ import crypto from "node:crypto";
 import express from "express";
 import rateLimit from "express-rate-limit";
 import QRCode from "qrcode";
+import { ethers } from "ethers";
 import { RoomError, MIN_PLAYERS } from "./room.js";
+import { MAX_ENTRY_FEE } from "./fee.js";
 import { TICK_MS, MAX_CARS } from "./sim.js";
 
 export function createRoutes({ manager, loop }) {
@@ -24,6 +26,30 @@ export function createRoutes({ manager, loop }) {
       res.status(500).json({ error: "internal error" });
     }
   };
+  const wrapAsync = (fn) => async (req, res) => {
+    try { await fn(req, res); } catch (e) {
+      if (e instanceof RoomError) return res.status(e.status).json({ error: e.message });
+      console.error("[rt] route error:", e);
+      res.status(500).json({ error: "internal error" });
+    }
+  };
+  // Entry fee in MON ("0.01"); 0 / absent = free lobby with no chain involvement.
+  const parseFee = (v) => {
+    if (v === undefined || v === null || Number(v) === 0) return 0n;
+    let wei;
+    try { wei = ethers.parseEther(String(v)); } catch { throw new RoomError("entryFee must be a decimal number of MON"); }
+    if (wei < 0n || wei > MAX_ENTRY_FEE) throw new RoomError("entryFee must be between 0 and 0.5 MON");
+    return wei;
+  };
+  // Join the on-chain race with this player's session wallet; undo the seat if it fails.
+  const payIn = async (rm, p, payoutTo) => {
+    if (!rm.chain || rm.chain.joined.has(p.playerId)) return;
+    if (payoutTo !== undefined && !ethers.isAddress(payoutTo)) { rm.removePlayer(p.playerId); throw new RoomError("payoutTo is not an address"); }
+    try { await rm.chain.join(p, payoutTo); } catch (e) {
+      rm.removePlayer(p.playerId);
+      throw new RoomError(`entry fee payment failed: ${e.shortMessage ?? e.message}`, 402);
+    }
+  };
   const pid = (req) => String(req.get("x-player-id") ?? req.body?.playerId ?? "");
   const room = (req) => {
     const rm = manager.get(req.params.id);
@@ -39,6 +65,7 @@ export function createRoutes({ manager, loop }) {
 
   r.get("/config", wrap((_req, res) => res.json({
     tickMs: TICK_MS, maxPlayers: MAX_CARS, minPlayers: MIN_PLAYERS,
+    paid: { enabled: !!process.env.RT_CONTRACT_ADDRESS, maxEntryFeeMon: ethers.formatEther(MAX_ENTRY_FEE) },
     modes: manager.allowShowcase ? ["HUMAN_ONLY", "AGENT_ONLY", "SHOWCASE_MIXED"] : ["HUMAN_ONLY", "AGENT_ONLY"],
     input: "packed int 0..11 = (steer+1) + 3*throttle + 6*brake, or {steer:-1|0|1, throttle:0|1, brake:0|1}",
   })));
@@ -48,11 +75,14 @@ export function createRoutes({ manager, loop }) {
   // Private identity. Chain wallets arrive with the contract phase (P4).
   r.post("/session", wrap((_req, res) => res.json({ playerId: crypto.randomBytes(16).toString("hex") })));
 
-  r.post("/lobby/create", wrap((req, res) => {
-    const { mode = "HUMAN_ONLY", sections, kind = "human", name } = req.body ?? {};
+  r.post("/lobby/create", wrapAsync(async (req, res) => {
+    const { mode = "HUMAN_ONLY", sections, kind = "human", name, entryFee, payoutTo } = req.body ?? {};
     const id = pid(req);
+    const fee = parseFee(entryFee);
+    if (fee > 0n && !id) throw new RoomError("a paid lobby needs a player id (X-Player-Id)");
     const rm = manager.create({ mode, sections: sections === undefined ? undefined : Number(sections), creator: id });
-    if (id) rm.addPlayer({ playerId: id, name, kind });
+    if (fee > 0n) await manager.makePaid(rm, fee);
+    if (id) { const p = rm.addPlayer({ playerId: id, name, kind }); await payIn(rm, p, payoutTo); }
     res.json({ raceId: rm.id, lobby: rm.lobbyView() });
   }));
 
@@ -62,10 +92,11 @@ export function createRoutes({ manager, loop }) {
     res.json({ raceId: rm.id, lobby: rm.lobbyView() });
   }));
 
-  r.post("/lobby/:id/join", wrap((req, res) => {
+  r.post("/lobby/:id/join", wrapAsync(async (req, res) => {
     const rm = room(req);
-    const { kind = "human", name } = req.body ?? {};
-    rm.addPlayer({ playerId: pid(req), name, kind });
+    const { kind = "human", name, payoutTo } = req.body ?? {};
+    const p = rm.addPlayer({ playerId: pid(req), name, kind });
+    await payIn(rm, p, payoutTo);
     res.json({ raceId: rm.id, lobby: rm.lobbyView() });
   }));
 
@@ -85,7 +116,7 @@ export function createRoutes({ manager, loop }) {
     if (rm.creator && rm.creator !== p.playerId) throw new RoomError("only the lobby creator can start", 403);
     if (req.body?.fillBots) rm.fillBots(Math.max(2, Math.min(MAX_CARS, Number(req.body.fillBots) || MIN_PLAYERS)));
     if (rm.players.length < MIN_PLAYERS) throw new RoomError(`need at least ${MIN_PLAYERS} players`, 409);
-    rm.start();
+    manager.start(rm);
     res.json({ ok: true, lobby: rm.lobbyView() });
   }));
 
@@ -112,7 +143,17 @@ export function createRoutes({ manager, loop }) {
   r.get("/race/:id/result", wrap((req, res) => {
     const rm = room(req);
     if (!rm.result()) return res.status(409).json({ error: "race not finished" });
-    res.json(rm.result());
+    res.json({ ...rm.result(), paid: rm.chain?.publicView() ?? null });
+  }));
+
+  // On-chain evidence for a paid race: commit, every checkpoint, the reveal. Compare with
+  // `node sim/verify.js` on the replay. Chunked getLogs from the race's creation block.
+  r.get("/race/:id/proof", wrapAsync(async (req, res) => {
+    const rm = room(req);
+    if (!rm.chain) throw new RoomError("not a paid race", 404);
+    const { rtChain } = await import("./chain-rt.js");
+    const events = await rtChain.events(rm.chain.raceId, rm.chain.createdBlock, rm.chain.settleBlock ?? undefined);
+    res.json({ contract: rtChain.address(), raceId: rm.chain.raceId, events });
   }));
 
   // Seed + every input: replayable with sim/verify.js. Only after the finish.

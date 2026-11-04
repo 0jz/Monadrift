@@ -3,12 +3,22 @@
 
 import { Room, RoomError } from "./room.js";
 
+// Loaded lazily: chain.js needs .env and an RPC, which free-play and tests do not.
+async function defaultPaidFactory(room, feeWei) {
+  if (!process.env.RT_CONTRACT_ADDRESS) throw new RoomError("paid races are not enabled on this server", 503);
+  const { PaidRace } = await import("./paid.js");
+  const { rtChainEnabled, rtChain } = await import("./chain-rt.js");
+  if (!rtChainEnabled()) throw new RoomError("paid races are not enabled on this server", 503);
+  return new PaidRace(room, feeWei, rtChain);
+}
+
 const KEEP_FINISHED_MS = 10 * 60 * 1000;
 const KEEP_FINISHED_MAX = 50;
 const MAX_ROOMS = 200;
 
 export class Manager {
-  constructor({ allowShowcase = process.env.RT_ALLOW_SHOWCASE === "1", onEvents = () => {}, sections = 60 } = {}) {
+  constructor({ allowShowcase = process.env.RT_ALLOW_SHOWCASE === "1", onEvents = () => {}, sections = 60, paidFactory = defaultPaidFactory } = {}) {
+    this.paidFactory = paidFactory;
     this.rooms = new Map();
     this.nextId = 1;
     this.allowShowcase = allowShowcase;
@@ -22,6 +32,27 @@ export class Manager {
     const room = new Room({ id: String(this.nextId++), mode, sections: sections ?? this.defaultSections, creator });
     this.rooms.set(room.id, room);
     return room;
+  }
+
+  /** Attach an entry fee: opens the on-chain race. Throws (and drops the room) if that fails. */
+  async makePaid(room, feeWei) {
+    const paid = await this.paidFactory(room, feeWei);
+    room.chain = paid;
+    room.startGuard = () => paid.guard();
+    try { await paid.create(); } catch (e) { this.rooms.delete(room.id); throw new RoomError(`could not open on-chain race: ${e.shortMessage ?? e.message}`, 502); }
+    return paid;
+  }
+
+  /** Manual start (routes). The loop's auto-start goes through tickAll(). */
+  start(room) {
+    const events = room.start();
+    this.dispatch(room, events);
+    return events;
+  }
+
+  dispatch(room, events) {
+    room.chain?.onEvents(events);
+    this.onEvents(room, events);
   }
 
   get(id) { return this.rooms.get(String(id)) ?? null; }
@@ -43,7 +74,7 @@ export class Manager {
     for (const room of this.rooms.values()) {
       if (room.phase === "finished") continue;
       const events = room.tick();
-      if (events.length) this.onEvents(room, events);
+      if (events.length) this.dispatch(room, events);
     }
     this.sweep();
   }
@@ -56,7 +87,7 @@ export class Manager {
     }
     // Abandoned lobbies (nobody ever filled them) after 30 min.
     for (const r of this.rooms.values()) {
-      if (r.phase === "lobby" && nowMs - r.createdAt > 30 * 60 * 1000) this.rooms.delete(r.id);
+      if (r.phase === "lobby" && nowMs - r.createdAt > 30 * 60 * 1000) { r.chain?.cancel(); this.rooms.delete(r.id); }
     }
   }
 

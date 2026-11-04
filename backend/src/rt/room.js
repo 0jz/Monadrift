@@ -58,6 +58,8 @@ export class Room {
     this.checkpoints = [];
     this._chained = ZERO_HASH;
     this._result = null;
+    this.chain = null; // PaidRace (rt/paid.js) when the lobby has an entry fee
+    this.startGuard = null;
   }
 
   // ---- roster ----
@@ -79,6 +81,15 @@ export class Room {
     return p;
   }
 
+  /** Lobby only. Used to undo a seat when its on-chain join failed. */
+  removePlayer(playerId) {
+    if (this.phase !== "lobby") return false;
+    const i = this.players.findIndex((p) => p.playerId === playerId);
+    if (i < 0) return false;
+    this.players.splice(i, 1);
+    return true;
+  }
+
   addBot(strategy = "safe") {
     if (this.phase !== "lobby") throw new RoomError("race already started", 409);
     if (this.full) throw new RoomError("lobby is full", 409);
@@ -97,6 +108,7 @@ export class Room {
   start() {
     if (this.phase !== "lobby") throw new RoomError("race already started", 409);
     if (this.players.length < 1) throw new RoomError("no players");
+    this.startGuard?.(this); // paid rooms: needs 2+ on-chain players, else commitSeed would revert
     this._seed = BigInt("0x" + Buffer.from(this._random()).toString("hex"));
     this._track = generateTrack(trackSeedFrom(this._seed), { sections: this.sections });
     // Shuffle the grid so joining first is not pole. The shuffle uses the same
@@ -139,7 +151,12 @@ export class Room {
   tick() {
     if (this.phase === "lobby") {
       this.lobbyTicks++;
-      if (this.players.length >= MIN_PLAYERS && this.lobbyTicks >= LOBBY_WAIT_TICKS && this.mode !== "SHOWCASE_MIXED") return this.start();
+      if (this.players.length >= MIN_PLAYERS && this.lobbyTicks >= LOBBY_WAIT_TICKS && this.mode !== "SHOWCASE_MIXED") {
+        try { return this.start(); } catch (e) {
+          if (!(e instanceof RoomError)) throw e;
+          this.lobbyTicks = 0; // e.g. a paid lobby still short of paying players: wait another round
+        }
+      }
       return [];
     }
     if (this.phase === "countdown") {
@@ -204,6 +221,7 @@ export class Room {
       players: this.players.map((p) => ({ name: p.name, kind: p.kind })),
       startsInTicks: this.phase === "lobby" && this.players.length >= MIN_PLAYERS ? Math.max(0, LOBBY_WAIT_TICKS - this.lobbyTicks) : null,
       countdown: this.phase === "countdown" ? this.countdown : null,
+      paid: this.chain ? this.chain.publicView() : null,
     };
   }
 
@@ -236,6 +254,18 @@ export class Room {
   }
 
   result() { return this._result; }
+
+  /** For the on-chain bridge ONLY (never routes/ws): the seed before the race, to commit to it. */
+  _secretSeed() { return this._seed; }
+
+  /** Finishing order of non-bot players, as playerIds (for settlement). Only after the race. */
+  finishers() {
+    if (this.phase !== "finished") return [];
+    return this._result.ranking
+      .filter((r) => r.finishTick !== null)
+      .map((r) => this.players.find((p) => p.slot === r.slot))
+      .filter((p) => p && !p.isBot);
+  }
 
   /** Only after the race: it contains the seed, which would hand the whole track to a cheater. */
   replay() {
