@@ -28,6 +28,7 @@ jobs:
           cache-dependency-path: backend/package-lock.json
       - run: npm ci
       - run: node --check src/index.js
+      - run: npm test
   sim:
     runs-on: ubuntu-latest
     steps:

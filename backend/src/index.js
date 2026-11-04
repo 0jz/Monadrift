@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
 import QRCode from "qrcode";
 import crypto from "node:crypto";
+import { initRt } from "./rt/index.js";
 import { readContract, getOrCreateSession, contractFor, provider, funder, TX_OVERRIDES, sendTx, retryRpc } from "./chain.js";
 
 // A single unexpected RPC error (rate limit, transient network blip, an
@@ -383,9 +384,20 @@ app.get("/race/:id/proof", async (req, res) => {
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
+// Real-time game (docs/REALTIME_PLAN.md). Mounted before listen so /rt exists from the first request.
+const rt = initRt(app);
+
 const server = app.listen(PORT, () => console.log(`[monadrift-backend] listening on :${PORT}`));
 
-const wss = new WebSocketServer({ server, path: "/ws" });
+// noServer + one dispatcher: two WebSocketServer({server, path}) instances on the
+// same HTTP server abort each other's handshakes with a 400.
+const wss = new WebSocketServer({ noServer: true });
+server.on("upgrade", (req, socket, head) => {
+  const pathname = new URL(req.url, "http://localhost").pathname;
+  if (pathname === "/ws") wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req));
+  else if (pathname === "/rt/ws" && rt.handleUpgrade) rt.handleUpgrade(req, socket, head);
+  else socket.destroy();
+});
 wss.on("connection", (ws, req) => {
   const url = new URL(req.url, "http://localhost");
   const raceId = url.searchParams.get("raceId");
