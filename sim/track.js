@@ -1,0 +1,45 @@
+// Deterministic track generation. Integer-only: the same seed yields the same
+// track in every JS engine, which is what lets a replay be verified later.
+
+export const SECTION_LEN = 20000; // mm (20 m)
+export const SECTIONS = 60; // 1.2 km lap
+export const HALF_WIDTH = 6000; // mm from centre line to each wall
+export const MAX_CURVE = 4; // curvature levels -4..4 (sign = left/right)
+
+// splitmix32: tiny, fast, integer-only PRNG.
+export function makeRng(seed) {
+  let s = seed >>> 0;
+  return () => {
+    s = (s + 0x9e3779b9) >>> 0;
+    let z = s;
+    z = Math.imul(z ^ (z >>> 16), 0x85ebca6b) >>> 0;
+    z = Math.imul(z ^ (z >>> 13), 0xc2b2ae35) >>> 0;
+    return (z ^ (z >>> 16)) >>> 0;
+  };
+}
+
+/**
+ * @returns {{ seed:number, curv:Int8Array, boost:Uint8Array }}
+ * curv[i]  signed curvature of section i (positive = bends right)
+ * boost[i] 1 if section i has a centre-line boost pad
+ */
+export function generateTrack(seed) {
+  const rng = makeRng(seed);
+  const curv = new Int8Array(SECTIONS);
+  const boost = new Uint8Array(SECTIONS);
+  let k = 0;
+  for (let i = 0; i < SECTIONS; i++) {
+    const inOpening = i < 3;
+    const inFinish = i >= SECTIONS - 2;
+    if (inOpening || inFinish) {
+      k = 0;
+    } else if (rng() % 100 < 45) {
+      // change the bend: usually a step, sometimes a sharp switch
+      const step = (rng() % 3) - 1 + (rng() % 100 < 15 ? (rng() % 2 ? 2 : -2) : 0);
+      k = Math.max(-MAX_CURVE, Math.min(MAX_CURVE, k + step));
+    }
+    curv[i] = k;
+    boost[i] = !inOpening && !inFinish && Math.abs(k) <= 1 && rng() % 100 < 12 ? 1 : 0;
+  }
+  return { seed: seed >>> 0, curv, boost };
+}
