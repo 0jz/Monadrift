@@ -66,6 +66,15 @@ contract Monadrift {
         uint8 speed;
         bool alive; // false only once "broke" (stake == 0)
         bool finished;
+        // The lane occupied at `position` right now — NOT a history log.
+        // Collision detection below scans for another live player whose
+        // (position, lane) currently matches where you're headed, instead of
+        // consulting a permanent claim record. See laneClaims removal note.
+        Lane lane;
+        // True after a wreck-respawn until the player's next successful move.
+        // A respawned car sits at its checkpoint with a stale `lane` from
+        // where it was wrecked, so it must not count as an occupant.
+        bool respawned;
     }
 
     struct Race {
@@ -84,8 +93,6 @@ contract Monadrift {
     uint256 public nextRaceId;
     mapping(uint256 => Race) private races;
     mapping(uint256 => mapping(address => Player)) private racePlayers;
-    // keccak(segment, lane) -> first address to claim that spot this race
-    mapping(uint256 => mapping(bytes32 => address)) private laneClaims;
 
     event LobbyCreated(uint256 indexed raceId, LobbyMode mode, uint256 entryFee);
     event PlayerJoined(uint256 indexed raceId, address indexed player, uint256 stake);
@@ -126,7 +133,9 @@ contract Monadrift {
             hp: HP_MAX,
             speed: 0,
             alive: true,
-            finished: false
+            finished: false,
+            lane: Lane.CENTER,
+            respawned: false
         });
         r.playerAddrs.push(msg.sender);
         r.pot += msg.value;
@@ -185,27 +194,31 @@ contract Monadrift {
         require(nextSeg <= SEGMENTS_TOTAL, "already finished");
 
         bool inGracePeriod = nextSeg <= GRACE_SEGMENTS;
-        bytes32 claimKey = keccak256(abi.encodePacked(nextSeg, lane));
 
         if (!inGracePeriod) {
-            address priorClaimant = laneClaims[raceId][claimKey];
-            if (priorClaimant != address(0) && priorClaimant != msg.sender) {
-                // Collision: priorClaimant already holds this segment+lane.
-                // No stake changes hands here anymore — losing a collision
-                // already costs you HP and, on a wreck, your progress back
-                // to the last checkpoint. Taking stake too was double
-                // punishment and the main way stake kept draining even
-                // while playing correctly (wrong-lane misses are the only
-                // remaining way to lose stake, and those are now avoidable
-                // since the correct lane is shown in the UI).
-                Player storage attacker = racePlayers[raceId][priorClaimant];
-                uint8 dmg = attacker.speed > 0 ? attacker.speed : 1;
-                _applyCollisionDamage(raceId, p, dmg);
-
-                emit Collision(raceId, priorClaimant, msg.sender, dmg, 0);
-                return;
+            // Collision = someone else is, RIGHT NOW, sitting at the exact
+            // segment+lane you're moving into — not "someone passed through
+            // here at some point earlier in the race." A permanent
+            // first-claim-wins map (the previous approach) meant that once
+            // any player's mandatory correct lane on a TURN/OBSTACLE segment
+            // was touched once, every later racer forced into that same
+            // lane by the deterministic seed would collide with a claimant
+            // who had long since moved on — an unrecoverable soft-lock
+            // (bounced back to their checkpoint forever). Scanning current
+            // live state instead means only an actual, still-present
+            // occupant can trigger a collision.
+            address[] storage addrs = r.playerAddrs;
+            for (uint256 i = 0; i < addrs.length; i++) {
+                address other = addrs[i];
+                if (other == msg.sender) continue;
+                Player storage occupant = racePlayers[raceId][other];
+                if (occupant.alive && !occupant.finished && !occupant.respawned && occupant.position == nextSeg && occupant.lane == lane) {
+                    uint8 dmg = occupant.speed > 0 ? occupant.speed : 1;
+                    _applyCollisionDamage(raceId, p, dmg);
+                    emit Collision(raceId, other, msg.sender, dmg, 0);
+                    return;
+                }
             }
-            laneClaims[raceId][claimKey] = msg.sender;
         }
 
         SegmentType segType = segmentAt(r.seed, nextSeg);
@@ -231,6 +244,8 @@ contract Monadrift {
 
         uint16 fromSeg = p.position;
         p.position = nextSeg;
+        p.lane = lane;
+        p.respawned = false;
         p.speed = p.speed + 1 > MAX_SPEED ? MAX_SPEED : p.speed + 1;
         if (isCheckpoint(nextSeg)) {
             p.lastCheckpoint = nextSeg;
@@ -249,6 +264,7 @@ contract Monadrift {
             p.hp = HP_MAX;
             p.position = p.lastCheckpoint;
             p.speed = 0;
+            p.respawned = true;
             emit Wrecked(raceId, p.addr, p.lastCheckpoint);
         } else {
             p.hp -= dmg;

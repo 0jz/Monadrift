@@ -341,6 +341,16 @@
             "name": "finished",
             "type": "bool",
             "internalType": "bool"
+          },
+          {
+            "name": "lane",
+            "type": "uint8",
+            "internalType": "enum Monadrift.Lane"
+          },
+          {
+            "name": "respawned",
+            "type": "bool",
+            "internalType": "bool"
           }
         ]
       }
