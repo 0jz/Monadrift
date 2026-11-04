@@ -18,7 +18,7 @@ A race is fully described by `(seed, input log)`. Every tick (50 ms) each driver
 
 ```bash
 node sim/run.js 1        # reference bot drives one lap, prints checkpoint hashes + log digest
-node --test "sim/*.test.js"         # 12 tests incl. golden replay and tamper detection
+node --test sim/*.test.js         # 12 tests incl. golden replay and tamper detection
 python -m http.server -d sim 8000   # then open http://localhost:8000/demo.html and drive with the keyboard
 ```
 
