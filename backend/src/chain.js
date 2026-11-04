@@ -5,7 +5,14 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const RPC_URL = process.env.RPC_URL || "https://testnet-rpc.monad.xyz";
+// RPC_URL may be a comma-separated list; reconnect() rotates to the next one,
+// so a throttled/dead endpoint fails over instead of being retried forever.
+// Free options (docs.monad.xyz/developer-essentials/testnets): QuickNode
+// testnet-rpc.monad.xyz, Ankr rpc.ankr.com/monad_testnet, Monad Foundation
+// rpc-testnet.monadinfra.com (no batching, slowest — keep it last).
+const RPC_URLS = (process.env.RPC_URL || "https://testnet-rpc.monad.xyz")
+  .split(",").map((u) => u.trim()).filter(Boolean);
+let rpcIndex = 0;
 const CHAIN_ID = Number(process.env.CHAIN_ID || 10143);
 const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS;
 const FUNDER_PRIVATE_KEY = process.env.FUNDER_PRIVATE_KEY;
@@ -39,7 +46,7 @@ function makeProvider() {
   // staticNetwork skips ethers' startup eth_chainId probe and batchMaxCount:1
   // disables JSON-RPC batching; the public testnet RPC answers batched/probe
   // calls with "403 Restricted JSON RPC method", which broke every write.
-  const p = new ethers.JsonRpcProvider(RPC_URL, CHAIN_ID, { staticNetwork: true, batchMaxCount: 1 });
+  const p = new ethers.JsonRpcProvider(RPC_URLS[rpcIndex], CHAIN_ID, { staticNetwork: true, batchMaxCount: 1 });
   // ethers' default polling interval (4000ms) is what's checking whether a
   // tx confirmed â€” completely unrelated to Monad's actual ~300ms block
   // time. A move landing on-chain in ~600ms was still taking 4+ seconds to
@@ -118,13 +125,14 @@ function deriveWalletFor(playerId) {
 /// help here (confirmed: it fails identically every time); a fresh
 /// connection does. retryRpc/sendTx call this after repeated failures.
 export function reconnect() {
+  rpcIndex = (rpcIndex + 1) % RPC_URLS.length;
   provider = makeProvider();
   if (FUNDER_PRIVATE_KEY) funder = new ethers.Wallet(FUNDER_PRIVATE_KEY, provider);
   readContract = contractAs(provider);
   for (const [playerId, wallet] of sessions) {
     sessions.set(playerId, wallet.connect(provider));
   }
-  console.warn("[chain] reconnected to RPC after repeated failures");
+  console.warn(`[chain] reconnected to RPC ${RPC_URLS[rpcIndex]} after repeated failures`);
 }
 
 const inflight = new Map(); // playerId -> Promise<Wallet> (dedupes concurrent first calls)
