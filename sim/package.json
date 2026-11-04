@@ -1,0 +1,9 @@
+{
+  "name": "monadrift-sim",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "run": "node run.js"
+  }
+}
