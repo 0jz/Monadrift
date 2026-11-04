@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+<title>Monadrift — Real-time</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg" />
+<style>
+  :root { color-scheme: dark; --bg:#0b0d12; --card:#161a23; --line:#2a3040; --fg:#e8e8f0; --dim:#8a90a2; --acc:#836ef9; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--fg); font:15px/1.4 system-ui, sans-serif; overflow:hidden; touch-action:none; }
+  .screen { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; padding:16px; overflow:auto; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:20px; width:min(420px,100%); display:grid; gap:12px; }
+  h1 { margin:0; font-size:22px; } h1 span { color:var(--acc); }
+  input { background:#0f1218; border:1px solid var(--line); color:var(--fg); border-radius:8px; padding:10px; font:inherit; width:100%; }
+  button { background:var(--acc); color:#fff; border:0; border-radius:8px; padding:11px 14px; font:inherit; font-weight:600; cursor:pointer; }
+  button.alt { background:#232838; }
+  button:disabled { opacity:.5; cursor:default; }
+  .row { display:flex; gap:8px; } .row > * { flex:1; }
+  .dim { color:var(--dim); font-size:13px; } .mono { font-family:ui-monospace, monospace; }
+  .hidden { display:none !important; }
+  ul { list-style:none; margin:0; padding:0; display:grid; gap:4px; }
+  #qr svg { width:160px; height:160px; background:#fff; border-radius:8px; padding:6px; display:block; margin:auto; }
+  #race { position:fixed; inset:0; }
+  canvas { width:100%; height:100%; display:block; }
+  #hud { position:absolute; top:10px; left:12px; right:12px; display:flex; justify-content:space-between; pointer-events:none; text-shadow:0 1px 3px #000; }
+  #hud b { font-size:26px; } #hud .big { text-align:right; }
+  #progress { position:absolute; left:12px; right:12px; top:56px; height:6px; background:#ffffff22; border-radius:3px; }
+  #progress i { position:absolute; top:-3px; width:3px; height:12px; border-radius:2px; transform:translateX(-50%); }
+  #cp { position:absolute; left:12px; bottom:12px; font-size:12px; color:var(--dim); pointer-events:none; }
+  #count { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:96px; font-weight:800; pointer-events:none; text-shadow:0 2px 12px #000; }
+  #touch { position:absolute; left:0; right:0; bottom:0; display:none; justify-content:space-between; padding:14px; gap:10px; }
+  #touch .grp { display:flex; gap:10px; }
+  #touch button { width:84px; height:84px; font-size:28px; background:#ffffff1f; touch-action:none; user-select:none; }
+  @media (pointer:coarse) { #touch { display:flex; } #cp { bottom:110px; } }
+  #end { background:#0b0d12cc; }
+</style>
+</head>
+<body>
+
+<div class="screen" id="menu">
+  <div class="card">
+    <h1>Mona<span>drift</span> <span class="dim" style="font-size:13px">real-time</span></h1>
+    <input id="name" placeholder="display name (optional)" maxlength="20" autocomplete="off" />
+    <button id="vsBots">Race vs bots</button>
+    <button id="quick" class="alt">Quick match</button>
+    <button id="create" class="alt">Create lobby (share QR)</button>
+    <p class="dim" id="menuStatus"></p>
+    <p class="dim">Arrows / WASD: ↑ throttle, ↓ brake, ← → steer. On a phone use the buttons.</p>
+  </div>
+</div>
+
+<div class="screen hidden" id="lobby">
+  <div class="card">
+    <h1>Lobby <span class="mono" id="lobbyId"></span></h1>
+    <div id="qr"></div>
+    <p class="dim">Scan to join. Race starts <span id="lobbyTimer">when 2+ players are in</span>.</p>
+    <ul id="players"></ul>
+    <div class="row">
+      <button id="startBtn" class="alt">Start now</button>
+      <button id="botsBtn" class="alt">Start with bots</button>
+    </div>
+    <p class="dim" id="lobbyStatus"></p>
+  </div>
+</div>
+
+<div id="race" class="hidden">
+  <canvas id="cv"></canvas>
+  <div id="hud">
+    <div><b id="speed">0</b> <span class="dim">km/h</span></div>
+    <div class="big"><b id="place">–</b><br /><span class="dim mono" id="clock">0.0 s</span></div>
+  </div>
+  <div id="progress"></div>
+  <div id="cp"></div>
+  <div id="count"></div>
+  <div id="touch">
+    <div class="grp"><button data-ctl="left">◀</button><button data-ctl="right">▶</button></div>
+    <div class="grp"><button data-ctl="down">■</button><button data-ctl="up">▲</button></div>
+  </div>
+</div>
+
+<div class="screen hidden" id="end">
+  <div class="card">
+    <h1>Results</h1>
+    <ul id="results"></ul>
+    <p class="dim">Anyone can re-run this race: <a id="replayLink" target="_blank" rel="noopener" style="color:var(--acc)">replay + seed</a> (verify with <span class="mono">node sim/verify.js</span>).</p>
+    <button id="again">Back to menu</button>
+  </div>
+</div>
+
+<script src="shared.js"></script>
+<script type="module" src="rt/app.js"></script>
+</body>
+</html>

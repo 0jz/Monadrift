@@ -141,3 +141,8 @@ P1 → P2 → P3 is one thread. P4's contract and tests only touch `src/`, `test
 - `backend/.env` not read or edited. New variables the user must add: `RT_CONTRACT_ADDRESS`, `RT_OPERATOR_PRIVATE_KEY` (optional), `RT_ENABLED`. `.env.example` is already modified in the working tree, so entries are proposed, not applied, until you say so.
 - `TX_OVERRIDES` unchanged. RT calls use their own measured limits.
 - Existing lane routes, `/ws`, `race.html`, `Monadrift.sol` and its ABI unchanged until P5 cutover.
+
+## Status notes
+
+- **P2 (done):** `backend/src/rt/`; replays are held in memory (disk files not written); no chain wallet yet.
+- **P3 (done, server-driven):** `frontend/race-rt.html` + `frontend/rt/{app,render,net,input}.js`. The client draws what the server sends (extrapolated between 20 Hz snaps); **no client-side prediction and no `sim/` copy yet**, so there is no `sync-sim` script or CI diff. Lobby and QR live inside `race-rt.html` (QR → `race-rt.html?lobby=<id>`); the lanes pages and `index.html` are untouched and there is no game selector yet. Dev without chain: `node backend/scripts/rt-dev.js` then open `/race-rt.html`.

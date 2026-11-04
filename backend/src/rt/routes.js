@@ -75,7 +75,7 @@ export function createRoutes({ manager, loop }) {
   r.get("/lobby/:id/qr", wrap(async (req, res) => {
     const rm = room(req);
     const base = (process.env.FRONTEND_URL || `${req.protocol}://${req.get("host")}`).replace(/\/$/, "");
-    const url = `${base}/index.html?game=rt&lobby=${encodeURIComponent(rm.id)}`;
+    const url = `${base}/race-rt.html?lobby=${encodeURIComponent(rm.id)}`;
     res.json({ url, svg: await QRCode.toString(url, { type: "svg", margin: 1 }) });
   }));
 
