@@ -247,7 +247,7 @@ export class Room {
     const to = Math.min(this.sections, idx + 9);
     return {
       t: "view", tick: w.tick, phase: this.phase, sections: this.sections,
-      cars: w.cars.map((c, slot) => ({ slot, name: this.players.find((p) => p.slot === slot).name, s: c.s, d: c.d, v: c.v, fin: c.finishTick >= 0 })),
+      cars: w.cars.map((c, slot) => ({ slot, name: this.players.find((p) => p.slot === slot).name, s: c.s, d: c.d, v: c.v, lv: c.lv, fin: c.finishTick >= 0 })),
       order,
       window: { from, curv: Array.from(this._track.curv.slice(from, to)), boost: Array.from(this._track.boost.slice(from, to)) },
     };

@@ -20,9 +20,11 @@ export const COAST = 200; // mm/s lost per tick with no input
 export const CORNER_STEP = 12000; // safe speed drops this much per curvature level
 export const STEER_ACCEL = 80; // mm/tick lateral velocity per tick
 export const STEER_FULL_SPEED = 30000; // below this speed steering is weaker
+export const STEER_MIN_SPEED = 24000; // steering never weaker than this speed gives, so a slow car can always turn off a wall
 export const DRIFT_DIV = 360; // road bends away: drift = -k*v / DRIFT_DIV
 export const GRIP_DIV = 20; // extra outward slide when over the safe speed
 export const WALL_SPEED_PCT = 70; // speed kept after touching a wall
+export const WALL_SLIDE_PCT = 97; // speed kept per tick while sliding along a wall
 export const WALL_SCRAPE = 40; // mm past the wall below which contact costs no speed
 export const TRACK_END = SECTIONS * SECTION_LEN;
 
@@ -65,13 +67,14 @@ export function step(st, track, input) {
   if (st.v > V_MAX && !throttle) st.v = Math.max(V_MAX, st.v - 400); // boost bleeds off
 
   // lateral motion: steering authority grows with speed
-  const authority = Math.trunc((STEER_ACCEL * Math.min(st.v, STEER_FULL_SPEED)) / STEER_FULL_SPEED);
+  const authority = Math.trunc((STEER_ACCEL * Math.max(STEER_MIN_SPEED, Math.min(st.v, STEER_FULL_SPEED))) / STEER_FULL_SPEED);
   st.lv = Math.trunc((st.lv * 85) / 100) + steer * authority;
 
   // the road bends away from a straight line; over the safe speed you also slide
   let drift = -Math.trunc((k * st.v) / DRIFT_DIV);
   const over = st.v - safeSpeed(k);
   if (k !== 0 && over > 0) drift -= Math.sign(k) * Math.trunc(over / GRIP_DIV);
+  const wasOnWall = Math.abs(st.d) >= HALF_WIDTH; // already touching the wall at the start of this tick
   st.d += st.lv + drift;
 
   // walls
@@ -81,10 +84,13 @@ export function step(st, track, input) {
     // and charging 30% speed for that each tick pinned it at ~2 m/s for ever
     // (steering authority and drift both scale with speed, so it could never
     // escape). Found in 12-car races where bumps shove cars onto the outside wall.
+    // v3: the 30% hit is a one-off IMPACT. A car that is already on the wall and is merely held
+    // there by the bend's drift only pays light sliding friction; before, every tick of
+    // contact cost 30% and a human who clipped the outside of a bend was pinned at ~10 km/h.
     const over = Math.abs(st.d) - HALF_WIDTH;
     if (over > WALL_SCRAPE) {
-      st.v = Math.trunc((st.v * WALL_SPEED_PCT) / 100);
-      st.wallHits++;
+      if (wasOnWall) st.v = Math.trunc((st.v * WALL_SLIDE_PCT) / 100);
+      else { st.v = Math.trunc((st.v * WALL_SPEED_PCT) / 100); st.wallHits++; }
     }
     // Only kill lateral velocity pointing INTO the wall; inward lv keeps building.
     if ((st.d > 0 && st.lv > 0) || (st.d < 0 && st.lv < 0)) st.lv = 0;

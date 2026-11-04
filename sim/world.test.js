@@ -151,7 +151,7 @@ test("observeWorld keeps the fog: 8 sections, nearby cars only, no identities, n
   const obs = observeWorld(w, track, 0);
   assert.equal(obs.ahead.length, 8);
   assert.ok(obs.others.length === 4, `saw ${obs.others.length}`); // 5 others minus the far one
-  for (const o of obs.others) assert.deepEqual(Object.keys(o).sort(), ["dd", "ds", "dv"]);
+  for (const o of obs.others) assert.deepEqual(Object.keys(o).sort(), ["dd", "dlv", "ds", "dv"]);
   assert.equal(obs.field, 6);
   assert.equal(obs.place, 2); // the car placed out of sight is ahead of us
   const json = JSON.stringify(obs);
@@ -227,4 +227,4 @@ test("verifyReplay accepts an honest replay and rejects forged checkpoints or ra
   assert.equal(verifyReplay({ ...replay, trackVersion: 99 }).ok, false);
 });
 
-const GOLDEN4 = { finalHash: "0x5d1ee4874cd11e8f66f74f504a63ac6c3de7e97418cc308fb05acaddd1fc22ce", ranking: [0, 1, 3, 2] };
+const GOLDEN4 = { finalHash: "0xe1cb78438b5296c535283b3593a466b9258d252dba865d3d0cdf91e7d758f902", ranking: [0, 1, 3, 2] };

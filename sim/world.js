@@ -123,7 +123,7 @@ export function observeWorld(world, track, slot, lookahead = 8) {
     if (i === slot || o.finishTick >= 0) return;
     const ds = o.s - me.s;
     if (Math.abs(ds) > OBSERVE_RADIUS) return;
-    others.push({ ds, dd: o.d - me.d, dv: o.v - me.v });
+    others.push({ ds, dd: o.d - me.d, dv: o.v - me.v, dlv: o.lv - me.lv });
   });
   others.sort((x, y) => y.ds - x.ds || x.dd - y.dd || x.dv - y.dv);
   obs.others = others;

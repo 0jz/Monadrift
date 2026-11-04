@@ -1,4 +1,4 @@
-import { RoadCache, draw, COLORS } from "./render.js";
+import { RoadCache, draw, lateralRate, yawOf } from "./render.js";
 import { rtApi, openSocket } from "./net.js";
 import { createInput } from "./input.js";
 
@@ -59,7 +59,7 @@ function onMsg(m) {
 
 function renderLobby(l) {
   sectionsTotal = l.sections;
-  $("players").innerHTML = l.players.map((p) => `<li>${p.kind === "bot" ? "🤖" : "🏎️"} ${esc(p.name)}</li>`).join("");
+  $("players").innerHTML = l.players.map((p) => `<li><span>${esc(p.name)}</span><span>${p.kind === "bot" ? "BOT" : "DRIVER"}</span></li>`).join("");
   $("lobbyTimer").textContent = l.startsInTicks === null ? "when 2+ players are in" : `in ${Math.ceil(l.startsInTicks / 20)} s`;
   $("startBtn").classList.toggle("hidden", !creator);
   $("botsBtn").classList.toggle("hidden", !creator);
@@ -72,7 +72,7 @@ function showEnd(result) {
   ended = true;
   input?.stop();
   $("results").innerHTML = result.ranking.map((r) =>
-    `<li>${r.place}. ${esc(r.name)}${r.isBot ? " 🤖" : ""} <span class="dim mono">${r.finishTick === null ? "DNF" : (r.finishTick / 20).toFixed(1) + " s"}</span></li>`).join("");
+    `<li class="${r.place === 1 ? "first" : ""}"><span>${r.place}. ${esc(r.name)}${r.isBot ? " · BOT" : ""}</span><span>${r.finishTick === null ? "DNF" : (r.finishTick / 20).toFixed(1) + " s"}</span></li>`).join("");
   $("replayLink").href = `${API}/rt/race/${raceId}/replay`;
   $("end").classList.remove("hidden");
 }
@@ -106,8 +106,10 @@ function resize() {
 }
 addEventListener("resize", resize);
 
+let myYaw = 0, lastFrame = 0;
 function frame(now) {
   requestAnimationFrame(frame);
+  const frameDt = Math.min(100, now - (lastFrame || now)); lastFrame = now;
   if (!latest || $("race").classList.contains("hidden")) return;
   const { msg, at } = latest;
   const dt = Math.min(100, now - at);
@@ -115,14 +117,23 @@ function frame(now) {
   if (msg.t === "snap") {
     const o = msg.obs;
     const meS = o.s + (o.v * dt) / 1000;
-    cars = [{ s: meS, d: o.d + (o.lv * dt) / 50, slot: msg.you, name: "You", me: true }];
-    for (const x of o.others) cars.push({ s: o.s + x.ds + ((o.v + x.dv) * dt) / 1000, d: o.d + x.dd, slot: 6 });
+    // Smooth my own nose (frame-rate independent); the 20 Hz lv steps would otherwise twitch it.
+    const k = road.curvAt(o.s), target = yawOf(o.lv, o.v, k);
+    myYaw += (target - myYaw) * (1 - Math.exp(-frameDt / 90));
+    cars = [{ s: meS, d: o.d + (lateralRate(o.lv, o.v, k) * dt) / 50, slot: msg.you, name: "You", me: true, yaw: myYaw }];
+    for (const x of o.others) {
+      const ov = o.v + x.dv, olv = o.lv + (x.dlv ?? 0), ok = road.curvAt(o.s + x.ds);
+      cars.push({ s: o.s + x.ds + (ov * dt) / 1000, d: o.d + x.dd + (lateralRate(olv, ov, ok) * dt) / 50, slot: 6, yaw: yawOf(olv, ov, ok) });
+    }
     camS = meS;
     hud = { speed: o.v, place: `${o.place}/${o.field}`, tick: msg.tick, progress: cars.map((c) => ({ s: c.s, me: c.me })) };
   } else {
-    cars = msg.cars.map((c) => ({ s: c.s + (c.v * dt) / 1000, d: c.d, slot: c.slot, name: c.name, done: c.fin }));
+    cars = msg.cars.map((c) => {
+      const k = road.curvAt(c.s);
+      return { s: c.s + (c.v * dt) / 1000, d: c.d + (lateralRate(c.lv ?? 0, c.v, k) * dt) / 50, slot: c.slot, name: c.name, done: c.fin, yaw: yawOf(c.lv ?? 0, c.v, k) };
+    });
     camS = cars[msg.order[0]].s;
-    hud = { speed: cars[msg.order[0]].v ?? 0, place: "spectating", tick: msg.tick, progress: cars.map((c) => ({ s: c.s })) };
+    hud = { speed: msg.cars[msg.order[0]].v ?? 0, place: "spectating", tick: msg.tick, progress: cars.map((c) => ({ s: c.s })) };
   }
   draw(ctx, cv.width, cv.height, { road, camS, cars, sections: msg.t === "view" ? msg.sections : sectionsTotal });
 
@@ -130,7 +141,7 @@ function frame(now) {
   $("place").textContent = hud.place;
   $("clock").textContent = (hud.tick / 20).toFixed(1) + " s";
   const end = (msg.t === "view" ? msg.sections : sectionsTotal) * 20000 || 1;
-  $("progress").innerHTML = hud.progress.map((p) => `<i style="left:${Math.min(100, (p.s / end) * 100)}%;background:${p.me ? "#fff" : "#8a90a2"}"></i>`).join("");
+  $("progress").innerHTML = hud.progress.map((p) => `<i style="left:${Math.min(100, (p.s / end) * 100)}%;background:${p.me ? "#d7ff3f" : "#8f8f96"}"></i>`).join("");
   $("count").textContent = msg.phase === "countdown" && msg.countdown !== null ? Math.ceil(msg.countdown / 20) : "";
 }
 requestAnimationFrame(frame);
