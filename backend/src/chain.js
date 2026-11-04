@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const RPC_URL = process.env.RPC_URL || "https://testnet-rpc.monad.xyz";
+const CHAIN_ID = Number(process.env.CHAIN_ID || 10143);
 const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS;
 const FUNDER_PRIVATE_KEY = process.env.FUNDER_PRIVATE_KEY;
 const SESSION_FUND_AMOUNT = process.env.SESSION_FUND_AMOUNT || "0.01";
@@ -35,7 +36,10 @@ try {
 // did `import { provider } from "./chain.js"` without them needing to
 // re-import anything.
 function makeProvider() {
-  const p = new ethers.JsonRpcProvider(RPC_URL);
+  // staticNetwork skips ethers' startup eth_chainId probe and batchMaxCount:1
+  // disables JSON-RPC batching; the public testnet RPC answers batched/probe
+  // calls with "403 Restricted JSON RPC method", which broke every write.
+  const p = new ethers.JsonRpcProvider(RPC_URL, CHAIN_ID, { staticNetwork: true, batchMaxCount: 1 });
   // ethers' default polling interval (4000ms) is what's checking whether a
   // tx confirmed — completely unrelated to Monad's actual ~300ms block
   // time. A move landing on-chain in ~600ms was still taking 4+ seconds to
@@ -123,44 +127,43 @@ export function reconnect() {
   console.warn("[chain] reconnected to RPC after repeated failures");
 }
 
-export async function getOrCreateSession(playerId) {
-  let wallet = sessions.get(playerId);
-  if (wallet) return wallet;
+const inflight = new Map(); // playerId -> Promise<Wallet> (dedupes concurrent first calls)
 
-  wallet = deriveWalletFor(playerId);
-  sessions.set(playerId, wallet);
-
-  if (funder) {
-    const amount = ethers.parseEther(SESSION_FUND_AMOUNT);
-    // The address is deterministic, so it may already be funded from
-    // before a restart (this Map is just a cache, not the source of
-    // truth). Only top up if it's actually running low — otherwise every
-    // restart would re-send funding to every player who'd ever played,
-    // burning the funder's balance for no reason.
-    const currentBalance = await provider.getBalance(wallet.address);
-    if (currentBalance < amount / 2n) {
-      await sendTx(() =>
-        funder.sendTransaction({
-          to: wallet.address,
-          value: amount,
-          ...TX_OVERRIDES,
-        })
-      );
-      // tx.wait() confirming doesn't guarantee every node behind this RPC
-      // endpoint has caught up yet — a spend attempted immediately after can
-      // hit a node that still sees the pre-funding balance and reject it.
-      // Poll until the funded balance is actually visible before handing
-      // the wallet back. Only needed when we actually just sent a funding
-      // tx — an already-funded wallet (the normal case after a restart)
-      // doesn't need to wait for anything.
-      for (let i = 0; i < 15; i++) {
-        const bal = await provider.getBalance(wallet.address);
-        if (bal >= amount) break;
-        await new Promise((r) => setTimeout(r, 400));
+export function getOrCreateSession(playerId) {
+  const cached = sessions.get(playerId);
+  if (cached) return Promise.resolve(cached);
+  if (inflight.has(playerId)) return inflight.get(playerId);
+  const p = (async () => {
+    const wallet = deriveWalletFor(playerId);
+    if (funder) {
+      const amount = ethers.parseEther(SESSION_FUND_AMOUNT);
+      // The address is deterministic, so it may already be funded from
+      // before a restart. Only top up if it's actually running low.
+      const currentBalance = await retryRpc(() => provider.getBalance(wallet.address));
+      if (currentBalance < amount / 2n) {
+        // Funding goes through the funder's send queue (see sendTx): Monad's
+        // reserve-balance rule reverts a second spend from an account under
+        // 10 MON within ~3 blocks, so back-to-back funding txs must be spaced.
+        await sendTx(
+          () => funder.sendTransaction({ to: wallet.address, value: amount, ...TX_OVERRIDES }),
+          { key: funder.address, retryReverts: 3 }
+        );
+        // tx.wait() confirming doesn't guarantee every node behind the RPC
+        // has caught up — poll until the funded balance is visible.
+        for (let i = 0; i < 15; i++) {
+          const bal = await provider.getBalance(wallet.address);
+          if (bal >= amount) break;
+          await new Promise((r) => setTimeout(r, 400));
+        }
       }
     }
-  }
-  return wallet;
+    // Cache only after funding succeeded, so a failed attempt is retried
+    // next call instead of handing back a permanently unfunded wallet.
+    sessions.set(playerId, wallet);
+    return wallet;
+  })().finally(() => inflight.delete(playerId));
+  inflight.set(playerId, p);
+  return p;
 }
 
 export function contractFor(wallet) {
@@ -181,20 +184,53 @@ function isGenuineRevert(err) {
 /// error — inconsistently, not correlated with fee level (see PROJECT.md
 /// for the debugging trail). Identical retries have consistently succeeded
 /// within a couple attempts, so retry rather than chase a moving target.
-export async function sendTx(fn, { retries = 6, delayMs = 1200 } = {}) {
+// Monad's reserve-balance rule: an account holding < 10 MON may only spend
+// below the reserve with the first tx it sends in any ~3-block window; a
+// second one reverts (and still burns the full gas limit). Every wallet here
+// (funder, ~0.3 MON session wallets) is under 10 MON, so txs from the same
+// sender are queued and spaced out. Different senders run in parallel.
+const MIN_SPACING_MS = Number(process.env.TX_MIN_SPACING_MS || 1500);
+const lanes = new Map(); // sender key -> { tail: Promise, last: number }
+
+async function sendTxNow(fn, { retries = 6, delayMs = 1200, retryReverts = 0 } = {}) {
   let lastErr;
+  let revertsLeft = retryReverts;
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
       const tx = await fn();
       return await tx.wait();
     } catch (err) {
       lastErr = err;
-      if (isGenuineRevert(err)) throw err; // fail fast — no amount of retrying changes a require() failure
+      if (isGenuineRevert(err)) {
+        // Real require() failures fail fast. Opt-in retry exists for plain
+        // transfers that can revert on the reserve rule, not on logic.
+        if (revertsLeft-- > 0) { await new Promise((r) => setTimeout(r, MIN_SPACING_MS * 2)); continue; }
+        throw err;
+      }
       if (attempt === 2) reconnect(); // a few same-connection retries first, then assume it's stuck
       if (attempt < retries - 1) await new Promise((r) => setTimeout(r, delayMs));
     }
   }
   throw lastErr;
+}
+
+export function sendTx(fn, opts = {}) {
+  const key = opts.key;
+  if (!key) return sendTxNow(fn, opts);
+  const lane = lanes.get(key) || { tail: Promise.resolve(), last: 0 };
+  lanes.set(key, lane);
+  const run = async () => {
+    const wait = lane.last + MIN_SPACING_MS - Date.now();
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    try {
+      return await sendTxNow(fn, opts);
+    } finally {
+      lane.last = Date.now();
+    }
+  };
+  const result = lane.tail.then(run, run);
+  lane.tail = result.catch(() => {});
+  return result;
 }
 
 /// Same reasoning as sendTx, for plain read (view) calls — /race/:id/state
