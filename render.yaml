@@ -1,0 +1,29 @@
+# Render Blueprint: New + > Blueprint > pick this repo. Free plan sleeps after
+# ~15 min idle (first request then takes ~30-60 s). Secrets are set in the
+# dashboard (sync: false), never committed.
+services:
+  - type: web
+    name: monadrift-backend
+    runtime: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm ci
+    startCommand: node src/index.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: RPC_URL
+        value: https://testnet-rpc.monad.xyz
+      - key: CHAIN_ID
+        value: "10143"
+      - key: SESSION_FUND_AMOUNT
+        value: "0.3"
+      - key: FRONTEND_URL
+        value: https://monadrift.vercel.app
+      - key: CONTRACT_ADDRESS
+        sync: false
+      - key: FUNDER_PRIVATE_KEY
+        sync: false
+      - key: SESSION_SEED
+        sync: false
