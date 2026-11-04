@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const RPC_URL = process.env.RPC_URL || "https://testnet-rpc.monad.xyz";
+const CHAIN_ID = Number(process.env.CHAIN_ID || 10143);
 const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS;
 const FUNDER_PRIVATE_KEY = process.env.FUNDER_PRIVATE_KEY;
 const SESSION_FUND_AMOUNT = process.env.SESSION_FUND_AMOUNT || "0.01";
@@ -35,7 +36,10 @@ try {
 // did `import { provider } from "./chain.js"` without them needing to
 // re-import anything.
 function makeProvider() {
-  const p = new ethers.JsonRpcProvider(RPC_URL);
+  // staticNetwork skips ethers' startup eth_chainId probe and batchMaxCount:1
+  // disables JSON-RPC batching; the public testnet RPC answers batched/probe
+  // calls with "403 Restricted JSON RPC method", which broke every write.
+  const p = new ethers.JsonRpcProvider(RPC_URL, CHAIN_ID, { staticNetwork: true, batchMaxCount: 1 });
   // ethers' default polling interval (4000ms) is what's checking whether a
   // tx confirmed — completely unrelated to Monad's actual ~300ms block
   // time. A move landing on-chain in ~600ms was still taking 4+ seconds to
