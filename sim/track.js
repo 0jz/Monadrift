@@ -2,7 +2,10 @@
 // track in every JS engine, which is what lets a replay be verified later.
 
 export const SECTION_LEN = 20000; // mm (20 m)
-export const SECTIONS = 60; // 1.2 km lap
+export const SECTIONS = 60; // 1.2 km lap (default; see generateTrack opts.sections)
+// Bump when the generator output changes for an existing (seed, sections), so
+// old replays can say which generator they were recorded with.
+export const TRACK_VERSION = 1;
 export const HALF_WIDTH = 6000; // mm from centre line to each wall
 export const MAX_CURVE = 4; // curvature levels -4..4 (sign = left/right)
 
@@ -19,18 +22,20 @@ export function makeRng(seed) {
 }
 
 /**
- * @returns {{ seed:number, curv:Int8Array, boost:Uint8Array }}
+ * @param {number} seed  uint32
+ * @param {{sections?:number}} opts  race length in sections (default 60)
+ * @returns {{ seed:number, version:number, curv:Int8Array, boost:Uint8Array }}
  * curv[i]  signed curvature of section i (positive = bends right)
  * boost[i] 1 if section i has a centre-line boost pad
  */
-export function generateTrack(seed) {
+export function generateTrack(seed, { sections = SECTIONS } = {}) {
   const rng = makeRng(seed);
-  const curv = new Int8Array(SECTIONS);
-  const boost = new Uint8Array(SECTIONS);
+  const curv = new Int8Array(sections);
+  const boost = new Uint8Array(sections);
   let k = 0;
-  for (let i = 0; i < SECTIONS; i++) {
+  for (let i = 0; i < sections; i++) {
     const inOpening = i < 3;
-    const inFinish = i >= SECTIONS - 2;
+    const inFinish = i >= sections - 2;
     if (inOpening || inFinish) {
       k = 0;
     } else if (rng() % 100 < 45) {
@@ -41,5 +46,5 @@ export function generateTrack(seed) {
     curv[i] = k;
     boost[i] = !inOpening && !inFinish && Math.abs(k) <= 1 && rng() % 100 < 12 ? 1 : 0;
   }
-  return { seed: seed >>> 0, curv, boost };
+  return { seed: seed >>> 0, version: TRACK_VERSION, curv, boost };
 }

@@ -23,6 +23,7 @@ export const STEER_FULL_SPEED = 30000; // below this speed steering is weaker
 export const DRIFT_DIV = 250; // road bends away: drift = -k*v / DRIFT_DIV
 export const GRIP_DIV = 20; // extra outward slide when over the safe speed
 export const WALL_SPEED_PCT = 70; // speed kept after touching a wall
+export const WALL_SCRAPE = 40; // mm past the wall below which contact costs no speed
 export const TRACK_END = SECTIONS * SECTION_LEN;
 
 export const safeSpeed = (k) => V_MAX - Math.abs(k) * CORNER_STEP;
@@ -41,7 +42,8 @@ export function createState() {
 }
 
 const clamp = (x, lo, hi) => (x < lo ? lo : x > hi ? hi : x);
-const section = (s) => Math.min(SECTIONS - 1, Math.floor(s / SECTION_LEN));
+const section = (s, n) => Math.min(n - 1, Math.floor(s / SECTION_LEN));
+export const trackEnd = (track) => track.curv.length * SECTION_LEN;
 
 /** Advance one tick. Mutates and returns `st`. */
 export function step(st, track, input) {
@@ -51,7 +53,8 @@ export function step(st, track, input) {
   const throttle = inp.throttle ? 1 : 0;
   const brake = inp.brake ? 1 : 0;
 
-  const idx = section(st.s);
+  const n = track.curv.length;
+  const idx = section(st.s, n);
   const k = track.curv[idx];
 
   // speed
@@ -73,10 +76,19 @@ export function step(st, track, input) {
 
   // walls
   if (st.d > HALF_WIDTH || st.d < -HALF_WIDTH) {
+    // A real hit (pushed past the wall by more than SCRAPE) costs speed. A scrape
+    // does not: drift pushes a slow car out of a hard bend by a few mm per tick,
+    // and charging 30% speed for that each tick pinned it at ~2 m/s for ever
+    // (steering authority and drift both scale with speed, so it could never
+    // escape). Found in 12-car races where bumps shove cars onto the outside wall.
+    const over = Math.abs(st.d) - HALF_WIDTH;
+    if (over > WALL_SCRAPE) {
+      st.v = Math.trunc((st.v * WALL_SPEED_PCT) / 100);
+      st.wallHits++;
+    }
+    // Only kill lateral velocity pointing INTO the wall; inward lv keeps building.
+    if ((st.d > 0 && st.lv > 0) || (st.d < 0 && st.lv < 0)) st.lv = 0;
     st.d = clamp(st.d, -HALF_WIDTH, HALF_WIDTH);
-    st.lv = 0;
-    st.v = Math.trunc((st.v * WALL_SPEED_PCT) / 100);
-    st.wallHits++;
   }
 
   // progress: the inside of a bend is the shorter way round
@@ -84,24 +96,25 @@ export function step(st, track, input) {
   st.s += Math.trunc((st.v * factor) / 20000);
 
   // boost pad: centre line only, once per section
-  const nIdx = section(st.s);
+  const nIdx = section(st.s, n);
   if (nIdx !== idx && track.boost[nIdx] && Math.abs(st.d) < 2500 && st.boostSection !== nIdx) {
     st.v = Math.min(st.v + 8000, BOOST_CAP);
     st.boostSection = nIdx;
   }
 
   st.tick++;
-  if (st.s >= TRACK_END) st.finishTick = st.tick;
+  if (st.s >= n * SECTION_LEN) st.finishTick = st.tick;
   return st;
 }
 
 /** What a driver (human or agent) may see: fog of war, not the whole track. */
 export function observe(st, track, lookahead = 8) {
-  const idx = section(st.s);
+  const n = track.curv.length;
+  const idx = section(st.s, n);
   const ahead = [];
   for (let j = 0; j < lookahead; j++) {
     const i = idx + j;
-    ahead.push(i < SECTIONS ? { curv: track.curv[i], boost: track.boost[i] } : null);
+    ahead.push(i < n ? { curv: track.curv[i], boost: track.boost[i] } : null);
   }
   return {
     tick: st.tick,
