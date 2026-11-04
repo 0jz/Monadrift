@@ -24,7 +24,7 @@ async function joinPresetLobby(playerId) {
   try {
     const result = await api("/lobby/quickmatch", { method: "POST", body: JSON.stringify({ playerId, lobby: presetLobby }) });
     saveRace(result.raceId);
-    location.href = "race.html";
+    location.href = "race-lanes.html";
   } catch (err) {
     status(`Couldn't join that lobby: ${err.message}`, true);
   }
@@ -50,7 +50,7 @@ el("registerBtn").onclick = async () => {
       // join that exact race directly.
       const result = await api("/lobby/quickmatch", { method: "POST", body: JSON.stringify({ playerId, lobby: presetLobby }) });
       saveRace(result.raceId);
-      location.href = "race.html";
+      location.href = "race-lanes.html";
       return;
     }
 

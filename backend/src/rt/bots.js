@@ -2,6 +2,7 @@
 // the observeWorld() result for their slot, nothing else.
 import { drive, encodeInput, CAR_LEN, CAR_WIDTH } from "./sim.js";
 
+const LIFT_MIN_V = 15000; // mm/s
 const sign = (x) => (x > 0 ? 1 : x < 0 ? -1 : 0);
 
 /**
@@ -18,7 +19,10 @@ export function botInput(strategy, obs) {
     .filter((o) => o.ds > 0 && o.ds < CAR_LEN * 3 && Math.abs(o.dd) < CAR_WIDTH * 1.3)
     .sort((a, b) => a.ds - b.ds)[0];
   if (ahead) {
-    if (ahead.ds < CAR_LEN * 2 && ahead.dv < 0) { inp.throttle = 0; }
+    // Never lift at a crawl: slow cars in a clump all lifting for each other decay to a
+    // standstill against the wall (seen in 12-car races, ~20% DNF) and steering has no
+    // authority at low speed. Below LIFT_MIN_V we only steer around.
+    if (ahead.ds < CAR_LEN * 2 && ahead.dv < 0 && obs.v > LIFT_MIN_V) { inp.throttle = 0; }
     inp.steer = Math.abs(obs.d) > 4000 ? -sign(obs.d) : ahead.dd === 0 ? (obs.d > 0 ? -1 : 1) : -sign(ahead.dd);
     return encodeInput(inp);
   }

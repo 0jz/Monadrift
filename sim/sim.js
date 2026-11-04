@@ -20,7 +20,7 @@ export const COAST = 200; // mm/s lost per tick with no input
 export const CORNER_STEP = 12000; // safe speed drops this much per curvature level
 export const STEER_ACCEL = 80; // mm/tick lateral velocity per tick
 export const STEER_FULL_SPEED = 30000; // below this speed steering is weaker
-export const DRIFT_DIV = 250; // road bends away: drift = -k*v / DRIFT_DIV
+export const DRIFT_DIV = 360; // road bends away: drift = -k*v / DRIFT_DIV
 export const GRIP_DIV = 20; // extra outward slide when over the safe speed
 export const WALL_SPEED_PCT = 70; // speed kept after touching a wall
 export const WALL_SCRAPE = 40; // mm past the wall below which contact costs no speed

@@ -122,4 +122,4 @@ test("safe speed falls with curvature and never exceeds top speed", () => {
   assert.ok(safeSpeed(4) < safeSpeed(1));
 });
 
-const GOLDEN = { finishTick: 505, hash: 1425463607 };
+const GOLDEN = { finishTick: 504, hash: 1146453121 };
