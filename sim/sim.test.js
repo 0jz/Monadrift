@@ -71,7 +71,7 @@ test("flat-out throttle with no steering is punished: walls and a slow lap", () 
   const track = generateTrack(7);
   const naive = lap(track, () => ({ steer: 0, throttle: 1, brake: 0 }));
   const smart = lap(track, drive);
-  assert.ok(naive.st.wallHits > 5, `naive wall hits ${naive.st.wallHits}`);
+  assert.ok(naive.st.wallHits >= 1, `naive wall hits ${naive.st.wallHits}`); // v3: one hit per contact, sliding is not re-counted
   assert.ok(smart.st.finishTick >= 0);
   assert.ok(naive.st.finishTick < 0 || naive.st.finishTick > smart.st.finishTick);
 });
@@ -122,4 +122,4 @@ test("safe speed falls with curvature and never exceeds top speed", () => {
   assert.ok(safeSpeed(4) < safeSpeed(1));
 });
 
-const GOLDEN = { finishTick: 505, hash: 1425463607 };
+const GOLDEN = { finishTick: 483, hash: 1687746566 };

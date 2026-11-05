@@ -1,0 +1,96 @@
+/* Real-time game UI, on the site's design tokens (same as style.css :root): near-black, lime accent,
+   square corners, corner-tick cards, uppercase Space Grotesk labels and JetBrains Mono numbers.
+   Separate from style.css because that file styles the lane game's #hud/#lanes ids. */
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+:root {
+  color-scheme: dark;
+  --bg: #0d0d0f; --surface: #17171a; --surface-2: #1e1e22; --line: #313136;
+  --ink: #f4f4f2; --ink-dim: #8f8f96; --accent: #d7ff3f; --accent-ink: #10120a;
+  --danger: #ff4d5e; --ok: #37e08c;
+}
+* { box-sizing: border-box; }
+button, input { font-family: inherit; }
+html, body { margin: 0; height: 100%; overflow: hidden; touch-action: none; }
+body {
+  background: var(--bg); color: var(--ink);
+  font: 15px/1.4 "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+/* the site's faint blueprint grid behind the menus */
+body::before {
+  content: ""; position: fixed; inset: 0; pointer-events: none;
+  background-image: linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px);
+  background-size: 44px 44px;
+}
+.mono { font-family: "JetBrains Mono", ui-monospace, monospace; }
+.hidden { display: none !important; }
+.dim { color: var(--ink-dim); font-size: 13px; }
+
+.screen { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 16px; overflow: auto; gap: 22px; }
+
+.brand { display: flex; align-items: center; gap: 13px; }
+.brand-mark { width: 22px; height: 22px; background: var(--accent); transform: rotate(45deg); position: relative; }
+.brand-mark::after { content: ""; position: absolute; inset: 5px; background: var(--bg); }
+.brand h1 { font-size: 21px; font-weight: 700; letter-spacing: -0.01em; margin: 0; text-transform: uppercase; }
+.brand h1 .rift { color: var(--accent); }
+.brand .tag { font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--ink-dim); border: 1px solid var(--line); padding: 4px 8px; margin-left: 4px; text-transform: uppercase; letter-spacing: 0.06em; }
+
+.card { background: var(--surface); border: 1px solid var(--line); padding: 22px; width: min(420px, 100%); display: grid; gap: 12px; position: relative; }
+.card::before, .card::after { content: ""; position: absolute; width: 9px; height: 9px; border: 2px solid var(--accent); opacity: 0.55; pointer-events: none; }
+.card::before { top: -1px; left: -1px; border-right: none; border-bottom: none; }
+.card::after { bottom: -1px; right: -1px; border-left: none; border-top: none; }
+.card h2 { margin: 0; font-size: 16px; text-transform: uppercase; letter-spacing: 0.02em; }
+.card h2 .mono { color: var(--accent); font-size: 12px; margin-left: 6px; }
+
+input[type=text], #name {
+  width: 100%; padding: 13px 14px; border: 1px solid var(--line); background: var(--surface-2);
+  color: var(--ink); font: inherit; font-size: 14px; outline: none; border-radius: 0;
+}
+#name::placeholder { color: var(--ink-dim); }
+#name:focus { border-color: var(--accent); }
+
+button {
+  padding: 13px 22px; border: 1px solid var(--accent); cursor: pointer; border-radius: 0;
+  background: var(--accent); color: var(--accent-ink);
+  font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.02em;
+  transition: transform 0.06s ease;
+}
+button:hover:not(:disabled) { transform: translate(-2px, -2px); box-shadow: 3px 3px 0 var(--accent); }
+button:active:not(:disabled) { transform: none; box-shadow: none; }
+button.alt { background: transparent; color: var(--accent); }
+button.alt:hover:not(:disabled) { background: var(--accent); color: var(--accent-ink); }
+button:disabled { opacity: 0.4; cursor: default; border-color: var(--line); background: var(--surface-2); color: var(--ink-dim); }
+.row { display: flex; gap: 8px; } .row > * { flex: 1; padding-left: 10px; padding-right: 10px; }
+
+.hint { margin: 0; font-size: 13px; color: var(--ink-dim); line-height: 1.6; border-left: 2px solid var(--line); padding-left: 12px; }
+.status { margin: 0; min-height: 1em; font-family: "JetBrains Mono", monospace; font-size: 13px; color: var(--danger); }
+.hint kbd { font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--accent); border: 1px solid var(--line); padding: 1px 5px; }
+
+ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-height: 200px; overflow-y: auto; }
+li { font-family: "JetBrains Mono", monospace; font-size: 13px; color: var(--ink-dim); background: var(--surface-2); border: 1px solid var(--line); padding: 8px 12px; display: flex; justify-content: space-between; gap: 10px; }
+li.first { color: var(--accent); border-color: var(--accent); }
+#qr svg { width: 180px; height: 180px; background: #fff; padding: 10px; display: block; margin: auto; }
+::-webkit-scrollbar { width: 8px; height: 8px; } ::-webkit-scrollbar-thumb { background: var(--line); }
+
+/* ---- race HUD: the lane game's stat tiles ---- */
+#race { position: fixed; inset: 0; }
+canvas { width: 100%; height: 100%; display: block; }
+#hud { position: absolute; top: 10px; left: 12px; right: 12px; display: flex; justify-content: space-between; gap: 1px; pointer-events: none; }
+.stat { background: rgba(23,23,26,0.82); border: 1px solid var(--line); padding: 8px 14px; min-width: 110px; }
+.stat-label { font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 3px; }
+.stat-value { font-family: "JetBrains Mono", monospace; font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+#speed { color: var(--accent); }
+.stat.right { text-align: right; }
+#progress { position: absolute; left: 12px; right: 12px; top: 74px; height: 4px; background: var(--line); }
+#progress i { position: absolute; top: -4px; width: 3px; height: 12px; transform: translateX(-50%); }
+#cp { position: absolute; left: 12px; bottom: 12px; font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--ink-dim); pointer-events: none; text-transform: uppercase; letter-spacing: 0.04em; }
+#count { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-family: "JetBrains Mono", monospace; font-size: 110px; font-weight: 600; color: var(--accent); pointer-events: none; text-shadow: 0 0 40px rgba(215,255,63,0.35); }
+#touch { position: absolute; left: 0; right: 0; bottom: 0; display: none; justify-content: space-between; padding: 14px; gap: 10px; }
+#touch .grp { display: flex; gap: 10px; }
+#touch button { width: 84px; height: 84px; font-size: 26px; padding: 0; background: rgba(23,23,26,0.82); border: 1px solid var(--accent); color: var(--accent); touch-action: none; user-select: none; }
+#touch button:active { background: var(--accent); color: var(--accent-ink); }
+@media (pointer: coarse) { #touch { display: flex; } #cp { bottom: 110px; } }
+#end { background: rgba(13,13,15,0.8); }
+#results li span:first-child { color: var(--ink); }
+a { color: var(--accent); }

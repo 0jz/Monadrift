@@ -1,4 +1,4 @@
-// Shared between index.html (join) and race.html (gameplay) — no bundler,
+// Shared between index.html (join) and race-lanes.html (gameplay) — no bundler,
 // so this is just a plain script both pages include. See PROJECT.md §8.
 
 // Locally, the backend serves these pages itself (same origin). Deployed

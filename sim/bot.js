@@ -1,13 +1,13 @@
 // Reference driver: reads only what observe() exposes (fog of war), so a human,
 // this bot and any third-party agent all race under the same information.
 
-import { V_MAX, BRAKE, TICK_MS, safeSpeed } from "./sim.js";
+import { V_MAX, BRAKE, TICK_MS, safeSpeed, bendSlide } from "./sim.js";
 import { SECTION_LEN, HALF_WIDTH } from "./track.js";
 
 const BRAKE_MM_S2 = (BRAKE * 1000) / TICK_MS; // deceleration in mm/s^2
 
 /** @returns {{steer:number, throttle:number, brake:number}} */
-export function drive(obs, { margin = 0.92, lineBias = 0.35 } = {}) {
+export function drive(obs, { margin = 0.97, lineBias = 0.35 } = {}) {
   const { v, d, lv, ahead, distToNextSection } = obs;
 
   // Highest speed we can carry now and still reach each upcoming section at
@@ -27,7 +27,7 @@ export function drive(obs, { margin = 0.92, lineBias = 0.35 } = {}) {
   // Line: hug the inside of the current bend a little, centre on straights.
   const k = ahead[0] ? ahead[0].curv : 0;
   const want = Math.trunc(Math.sign(k) * Math.min(Math.abs(k), 3) * lineBias * (HALF_WIDTH / 3));
-  const drift = -Math.trunc((k * v) / 250);
+  const drift = bendSlide(k, v);
   const predicted = d + lv * 3 + drift * 3;
   const err = want - predicted;
   const dead = 150;

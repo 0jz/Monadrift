@@ -77,7 +77,7 @@ async function pollState() {
     if (state.phase === 2) {
       // RUNNING — everyone in the lobby (creator included) heads to the race.
       clearInterval(pollTimer);
-      location.href = "race.html";
+      location.href = "race-lanes.html";
     }
   } catch {
     // transient — next poll will retry

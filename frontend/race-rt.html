@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+<title>Monadrift — Real-time</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg" />
+<link rel="stylesheet" href="rt/rt.css" />
+</head>
+<body>
+
+<div class="screen" id="menu">
+  <div class="brand"><div class="brand-mark"></div><h1>Mona<span class="rift">drift</span></h1><span class="tag">real-time</span></div>
+  <div class="card">
+    <input id="name" placeholder="display name (optional)" maxlength="20" autocomplete="off" />
+    <button id="vsBots">Race vs bots</button>
+    <button id="quick" class="alt">Quick match</button>
+    <button id="create" class="alt">Create lobby (share QR)</button>
+    <p class="status" id="menuStatus"></p>
+    <p class="hint"><kbd>↑</kbd> throttle · <kbd>↓</kbd> brake · <kbd>←</kbd><kbd>→</kbd> steer (or WASD). On a phone use the buttons.</p>
+  </div>
+</div>
+
+<div class="screen hidden" id="lobby">
+  <div class="brand"><div class="brand-mark"></div><h1>Mona<span class="rift">drift</span></h1><span class="tag">real-time</span></div>
+  <div class="card">
+    <h2>Lobby <span class="mono" id="lobbyId"></span></h2>
+    <div id="qr"></div>
+    <p class="hint">Scan to join. Race starts <span id="lobbyTimer" class="mono">when 2+ players are in</span>.</p>
+    <ul id="players"></ul>
+    <div class="row">
+      <button id="startBtn" class="alt">Start now</button>
+      <button id="botsBtn" class="alt">Start with bots</button>
+    </div>
+    <p class="status" id="lobbyStatus"></p>
+  </div>
+</div>
+
+<div id="race" class="hidden">
+  <canvas id="cv"></canvas>
+  <div id="hud">
+    <div class="stat"><div class="stat-label">Speed km/h</div><div class="stat-value" id="speed">0</div></div>
+    <div class="stat right"><div class="stat-label">Position · <span id="clock">0.0 s</span></div><div class="stat-value" id="place">–</div></div>
+  </div>
+  <div id="progress"></div>
+  <div id="cp"></div>
+  <div id="count"></div>
+  <div id="touch">
+    <div class="grp"><button data-ctl="left">◀</button><button data-ctl="right">▶</button></div>
+    <div class="grp"><button data-ctl="down">■</button><button data-ctl="up">▲</button></div>
+  </div>
+</div>
+
+<div class="screen hidden" id="end">
+  <div class="brand"><div class="brand-mark"></div><h1>Mona<span class="rift">drift</span></h1><span class="tag">real-time</span></div>
+  <div class="card">
+    <h2>Results</h2>
+    <ul id="results"></ul>
+    <p class="hint">Anyone can re-run this race: <a id="replayLink" target="_blank" rel="noopener">replay + seed</a> (verify with <span class="mono">node sim/verify.js</span>).</p>
+    <button id="again">Back to menu</button>
+  </div>
+</div>
+
+<script src="shared.js"></script>
+<script type="module" src="rt/app.js"></script>
+</body>
+</html>
