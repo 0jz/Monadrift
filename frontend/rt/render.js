@@ -12,12 +12,11 @@ const K = 0.05; // radians turned per curvature level per section (visual only)
 const STEP = 2500; // mm between centre-line samples
 // Visual-only copies of sim constants (sim/sim.js): the car's nose points along its real path
 // over the ground, i.e. road heading + atan(sideways mm per tick / forward mm per tick).
-const DRIFT_DIV = 360, GRIP_DIV = 20, V_MAX = 70000, CORNER_STEP = 12000, MAX_YAW = 0.6;
+const GRIP_DIV = 8, V_MAX = 70000, CORNER_STEP = 12000, MAX_YAW = 0.6;
 /** Sideways travel in road frame, mm/tick: steering velocity plus the bend (and over-speed) slide. */
 export function lateralRate(lv, v, k) {
-  let drift = -Math.trunc((k * v) / DRIFT_DIV);
   const over = v - (V_MAX - Math.abs(k) * CORNER_STEP);
-  if (k !== 0 && over > 0) drift -= Math.sign(k) * Math.trunc(over / GRIP_DIV);
+  const drift = k !== 0 && over > 0 ? -Math.sign(k) * Math.trunc(over / GRIP_DIV) : 0;
   return lv + drift;
 }
 /** Nose angle relative to the road, radians; + = pointing right. */

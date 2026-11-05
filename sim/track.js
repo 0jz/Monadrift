@@ -5,7 +5,7 @@ export const SECTION_LEN = 20000; // mm (20 m)
 export const SECTIONS = 60; // 1.2 km lap (default; see generateTrack opts.sections)
 // Bump when the generator output changes for an existing (seed, sections), so
 // old replays can say which generator they were recorded with.
-export const TRACK_VERSION = 5; // 5: gentler bend push (DRIFT_DIV 600, GRIP_DIV 40). 4: steering authority floor (STEER_MIN_SPEED) so slow cars can leave a wall. 3: wall hit is one-off, sliding costs 3%/tick. 2: DRIFT_DIV 250 -> 360 (P5 balance). Physics is versioned with the track so old replays fail loudly.
+export const TRACK_VERSION = 6; // 6: no constant bend drift, only over-speed slide (bendSlide). 5: gentler bend push (DRIFT_DIV 600, GRIP_DIV 40). 4: steering authority floor (STEER_MIN_SPEED) so slow cars can leave a wall. 3: wall hit is one-off, sliding costs 3%/tick. 2: DRIFT_DIV 250 -> 360 (P5 balance). Physics is versioned with the track so old replays fail loudly.
 export const HALF_WIDTH = 6000; // mm from centre line to each wall
 export const MAX_CURVE = 4; // curvature levels -4..4 (sign = left/right)
 

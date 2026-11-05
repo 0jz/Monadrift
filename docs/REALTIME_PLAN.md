@@ -156,4 +156,5 @@ P1 → P2 → P3 is one thread. P4's contract and tests only touch `src/`, `test
   - Wall rule: the 30% speed loss is a one-off impact; a car already on the wall pays 3%/tick sliding friction (`WALL_SLIDE_PCT`). Before, clipping the outside of a bend pinned a human at ~10 km/h.
   - Steering floor: `STEER_MIN_SPEED` 24 m/s, so a slow car can always turn off a wall. With only the wall rule, 12-bot DNF rose to ~10%; with the floor it is 0% (8 and 12 bots, 30 races each), 0.7 wall hits per car. `TRACK_VERSION` is 4; goldens regenerated.
   - v5: bends push you outward less (`DRIFT_DIV` 360 -> 600, `GRIP_DIV` 20 -> 40): wall hits per bot 0.7 -> 0.1, DNF still 0%. Goldens regenerated again.
+  - v6 (movement rewrite): no constant sideways pull in bends at all; the car follows the road. You only slide outward when over the safe speed (`bendSlide`, `GRIP_DIV` 8) and the slide scrubs speed (`SCRUB_MUL` 2), so over-driving a bend costs time instead of dragging you to the outer wall. Reference bot margin 0.97. Reference lap 483 ticks; careless flat-out laps are slower or hit walls. `TRACK_VERSION` 6.
   - Not verified: a steered human lap and the phone layout.

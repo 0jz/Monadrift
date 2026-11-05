@@ -21,14 +21,16 @@ export const CORNER_STEP = 12000; // safe speed drops this much per curvature le
 export const STEER_ACCEL = 80; // mm/tick lateral velocity per tick
 export const STEER_FULL_SPEED = 30000; // below this speed steering is weaker
 export const STEER_MIN_SPEED = 24000; // steering never weaker than this speed gives, so a slow car can always turn off a wall
-export const DRIFT_DIV = 600; // road bends away: drift = -k*v / DRIFT_DIV
-export const GRIP_DIV = 40; // extra outward slide when over the safe speed
+export const SCRUB_MUL = 2; // speed lost per mm of slide (mm/s per mm)
+export const GRIP_DIV = 8; // outward slide per mm/s over the safe speed
 export const WALL_SPEED_PCT = 70; // speed kept after touching a wall
 export const WALL_SLIDE_PCT = 97; // speed kept per tick while sliding along a wall
 export const WALL_SCRAPE = 40; // mm past the wall below which contact costs no speed
 export const TRACK_END = SECTIONS * SECTION_LEN;
 
 export const safeSpeed = (k) => V_MAX - Math.abs(k) * CORNER_STEP;
+/** Sideways slide per tick (mm, + = right) in a bend of curvature k at speed v: 0 unless over the safe speed. */
+export const bendSlide = (k, v) => { const over = v - safeSpeed(k); return k !== 0 && over > 0 ? -Math.sign(k) * Math.trunc(over / GRIP_DIV) : 0; };
 
 // Inputs: steer -1|0|1, throttle 0|1, brake 0|1, packed in one small int so a
 // race log is a plain array of bytes (cheap to sign, hash and commit on-chain).
@@ -70,10 +72,10 @@ export function step(st, track, input) {
   const authority = Math.trunc((STEER_ACCEL * Math.max(STEER_MIN_SPEED, Math.min(st.v, STEER_FULL_SPEED))) / STEER_FULL_SPEED);
   st.lv = Math.trunc((st.lv * 85) / 100) + steer * authority;
 
-  // the road bends away from a straight line; over the safe speed you also slide
-  let drift = -Math.trunc((k * st.v) / DRIFT_DIV);
-  const over = st.v - safeSpeed(k);
-  if (k !== 0 && over > 0) drift -= Math.sign(k) * Math.trunc(over / GRIP_DIV);
+  // v6: the car FOLLOWS the road. There is no constant sideways pull in a bend (it used to drag you
+  // toward the outer wall even at a sane speed); you only slide outward when over the safe speed.
+  const drift = bendSlide(k, st.v);
+  if (drift !== 0) st.v -= Math.trunc(Math.abs(drift) * SCRUB_MUL); // sliding scrubs speed, so over-driving a bend costs time
   const wasOnWall = Math.abs(st.d) >= HALF_WIDTH; // already touching the wall at the start of this tick
   st.d += st.lv + drift;
 

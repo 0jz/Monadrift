@@ -51,7 +51,7 @@ test("a one-car world is exactly the single-car sim (golden lap still holds)", (
     step(solo, track, input);
   }
   assert.equal(stateHash(w.cars[0]), stateHash(solo));
-  assert.equal(solo.finishTick, 504);
+  assert.equal(solo.finishTick, 483);
 });
 
 test("sections is a track parameter; default stays 60 and old tracks are unchanged", () => {
@@ -227,4 +227,4 @@ test("verifyReplay accepts an honest replay and rejects forged checkpoints or ra
   assert.equal(verifyReplay({ ...replay, trackVersion: 99 }).ok, false);
 });
 
-const GOLDEN4 = { finalHash: "0xf9d1f159a7a382c73dc6e4fed338e09ee7946b9a05165a1fc5de0094c6d98b06", ranking: [0, 1, 3, 2] };
+const GOLDEN4 = { finalHash: "0xc78ffd14e1ac117b401bfa99d089805c86fcd681458f26213a4b1bce79d22fd5", ranking: [0, 1, 3, 2] };
