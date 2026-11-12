@@ -6,7 +6,7 @@ An on-chain checkpoint racer on Monad testnet where the track is generated secon
 
 Built at [Monad Blitz Belgrade](https://luma.com/blitz-belgrade-aug-2026), 2026-08-22.
 
-**[▶ Play it live](https://monadrift.vercel.app)** · Contract: [`0x778826D6c5831Fd9c263933bc1fC06b208FB55De`](https://testnet.monadvision.com/address/0x778826D6c5831Fd9c263933bc1fC06b208FB55De) on Monad testnet (chain id `10143`)
+**[▶ Play it live](https://monadrift.vercel.app)** · Contract: [`0x1eA7615702C73fd7068E0351d002d9fAA95F8653`](https://testnet.monadvision.com/address/0x1eA7615702C73fd7068E0351d002d9fAA95F8653) on Monad testnet (chain id `10143`)
 
 ![Monad](https://img.shields.io/badge/Monad-testnet-836EF9)
 ![Solidity](https://img.shields.io/badge/Solidity-0.8.24-363636?logo=solidity&logoColor=white)
