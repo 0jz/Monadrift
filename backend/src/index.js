@@ -309,6 +309,22 @@ app.get("/race/:id/segment/:i", async (req, res) => {
   }
 });
 
+// Monad bills the full gasLimit, so chooseLane gets a per-move limit instead of
+// the flat 200k (~0.021 MON/move drained a 0.3 MON session by segment 14 of 60).
+// estimateGas, 2026-11-12: ~51k in the grace segments, ~69k with 2 players,
+// roughly +8k per extra player (collision scan), and ~+47k on the finishing
+// move (finishOrder push). Unknown position (first move after a restart)
+// assumes the finishing move, so the limit is never too low.
+const SEGMENTS_TOTAL = 60; // Monadrift.sol
+const raceSizes = new Map(); // raceId -> player count (fixed once RUNNING)
+const lastPositions = new Map(); // `${raceId}:${address}` -> position after the last move
+// ponytail: both maps grow per race forever; prune on settle if the process ever lives long enough to matter.
+async function moveGasLimit(raceId, address) {
+  if (!raceSizes.has(raceId)) raceSizes.set(raceId, (await retryRpc(() => readContract.getPlayers(raceId))).length);
+  const finishing = (lastPositions.get(`${raceId}:${address}`) ?? SEGMENTS_TOTAL) >= SEGMENTS_TOTAL - 1;
+  return BigInt(80000 + 10000 * (raceSizes.get(raceId) - 1) + (finishing ? 60000 : 0));
+}
+
 app.post("/race/:id/move", async (req, res) => {
   try {
     const raceId = req.params.id;
@@ -319,11 +335,13 @@ app.post("/race/:id/move", async (req, res) => {
     const wallet = await getOrCreateSession(playerId);
     const c = contractFor(wallet);
 
+    const gasLimit = await moveGasLimit(raceId, wallet.address);
     const started = Date.now();
-    const receipt = await sendTx(() => c.chooseLane(raceId, laneIdx, TX_OVERRIDES), { key: c.runner.address });
+    const receipt = await sendTx(() => c.chooseLane(raceId, laneIdx, { ...TX_OVERRIDES, gasLimit }), { key: c.runner.address });
     const latencyMs = Date.now() - started;
 
     const p = await retryRpc(() => readContract.getPlayer(raceId, wallet.address));
+    lastPositions.set(`${raceId}:${wallet.address}`, Number(p.position));
     const payload = {
       type: "move",
       playerId,
