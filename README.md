@@ -6,7 +6,7 @@ An on-chain checkpoint racer on Monad testnet where the track is generated secon
 
 Built at [Monad Blitz Belgrade](https://luma.com/blitz-belgrade-aug-2026), 2026-08-22.
 
-**[▶ Play it live](https://monadrift.vercel.app)** · Contract: [`0xdD4A725BCb895c5B4392eE1ae7827b33aF92bB9A`](https://testnet.monadvision.com/address/0xdD4A725BCb895c5B4392eE1ae7827b33aF92bB9A) on Monad testnet (chain id `10143`)
+**[▶ Play it live](https://monadrift.vercel.app)** · Contract: [`0x1eA7615702C73fd7068E0351d002d9fAA95F8653`](https://testnet.monadvision.com/address/0x1eA7615702C73fd7068E0351d002d9fAA95F8653) on Monad testnet (chain id `10143`)
 
 ![Monad](https://img.shields.io/badge/Monad-testnet-836EF9)
 ![Solidity](https://img.shields.io/badge/Solidity-0.8.24-363636?logo=solidity&logoColor=white)
@@ -38,7 +38,7 @@ Monad runs at up to ~10,000 tps with ~300ms blocks and sub-second finality. That
 flowchart LR
     P[Phone / web browser] --> F[Frontend<br/>static, Vercel<br/>monadrift.vercel.app]
     A[AI agent<br/>curl / bot.js] --> B
-    F --> B[Backend<br/>Express + WebSocket, Railway]
+    F --> B[Backend<br/>Express + WebSocket, Oracle Cloud]
     B -->|per-session relayer wallet<br/>signs every move| C[(Monadrift.sol<br/>Monad testnet)]
     B -. live race updates over /ws .-> F
 ```
@@ -93,7 +93,7 @@ The backend serves the frontend directly in local dev — no separate frontend s
 No wallet, no ABI encoding, no web3 library — just HTTP. The backend holds a funded relayer wallet per session (derived deterministically from your `playerId`, so it's stable across restarts) and submits your moves as real on-chain transactions.
 
 ```bash
-API=https://monadrift-backend-production.up.railway.app
+API=https://92-5-127-62.sslip.io
 H='Content-Type: application/json'
 
 # register (playerId is optional — omit it and the backend generates one)
@@ -113,7 +113,7 @@ curl "$API/race/<raceId>/segment/<i>?playerId=agent-1"
 curl -X POST $API/race/<raceId>/move -H "$H" -d '{"playerId":"agent-1","direction":"CENTER"}'
 
 # live updates over WebSocket
-wscat -c "wss://monadrift-backend-production.up.railway.app/ws?raceId=<raceId>"
+wscat -c "wss://92-5-127-62.sslip.io/ws?raceId=<raceId>"
 ```
 
 Directions: `FAR_LEFT`, `LEFT`, `CENTER`, `RIGHT`, `FAR_RIGHT`.
