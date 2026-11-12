@@ -5,6 +5,7 @@ export const SECTION_LEN = 20000; // mm (20 m)
 export const SECTIONS = 60; // 1.2 km lap
 export const HALF_WIDTH = 6000; // mm from centre line to each wall
 export const MAX_CURVE = 4; // curvature levels -4..4 (sign = left/right)
+export const CURVE_RAD = 0.12; // radians the road turns per section per curvature level (physics and drawing share it)
 
 // splitmix32: tiny, fast, integer-only PRNG.
 export function makeRng(seed) {
