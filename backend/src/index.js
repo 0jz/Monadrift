@@ -20,6 +20,9 @@ process.on("uncaughtException", (err) => console.error("[uncaught exception]", e
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
+// Deployed behind exactly one reverse proxy (Caddy / Render / Railway), so the
+// rate limiters key on the real client IP from X-Forwarded-For, not the proxy's.
+app.set("trust proxy", 1);
 app.use(cors());
 app.use(express.json());
 // Single server for the demo laptop — see PROJECT.md §8. Phones only need
