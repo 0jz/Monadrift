@@ -48,7 +48,8 @@ git clone https://github.com/0jz/Monadrift.git && cd Monadrift/backend && npm ci
 cp .env.example .env && chmod 600 .env   # fill CONTRACT_ADDRESS, FUNDER_PRIVATE_KEY, SESSION_SEED (same seed as before)
 
 # Oracle's Ubuntu image blocks everything but SSH in iptables, on top of the security list
-sudo iptables -I INPUT 6 -p tcp -m multiport --dports 80,443 -j ACCEPT
+# insert just above the REJECT rule (its position varies by image)
+sudo iptables -I INPUT $(sudo iptables -L INPUT --line-numbers | awk '/REJECT/{print $1; exit}') -p tcp -m multiport --dports 80,443 -j ACCEPT
 sudo netfilter-persistent save
 
 sudo cp ../deploy/oracle/monadrift.service /etc/systemd/system/
