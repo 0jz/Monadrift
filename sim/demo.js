@@ -43,7 +43,7 @@ function buildGeometry() {
     for (const side of [-HALF_WIDTH, HALF_WIDTH])
       for (let j = a; j <= b; j++) { const p = edgeAt(j, side); j === a ? edges.moveTo(p.x, p.y) : edges.lineTo(p.x, p.y); }
     const bend = Math.min(1, Math.abs(track.curv[i]) / 4);
-    sections.push({ surf, edges, fill: track.boost[i] ? "rgba(67,224,201,0.35)" : `rgb(${46 + 80 * bend},51,${80 + 60 * bend})` });
+    sections.push({ surf, edges, fill: track.boost[i] ? "rgba(55,224,140,0.32)" : `rgb(${46 + 50 * bend},${46 - 8 * bend},${52 - 6 * bend})` }); // tighter bend = warmer
   }
 }
 
@@ -73,8 +73,10 @@ const keys = new Set();
 addEventListener("keydown", (e) => { keys.add(e.key.toLowerCase()); if (e.key.startsWith("Arrow") || e.key === " ") e.preventDefault(); });
 addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
 addEventListener("blur", () => keys.clear()); // no stuck throttle after alt-tab
+const randomSeed = () => { $("seed").value = Math.floor(Math.random() * 100000); best = null; reset(); };
 $("restart").onclick = reset;
-$("seed").onchange = reset;
+$("random").onclick = randomSeed;
+$("seed").onchange = () => { best = null; reset(); };
 
 function readInput() {
   const left = keys.has("arrowleft") || keys.has("a");
@@ -121,7 +123,7 @@ function draw(alpha) {
     ctx.fillStyle = sections[i].fill;
     ctx.fill(sections[i].surf);
   }
-  ctx.strokeStyle = "#d9ff3f";
+  ctx.strokeStyle = "#d7ff3f";
   ctx.lineWidth = 120;
   for (let i = first; i <= lastSec; i++) {
     ctx.globalAlpha = Math.max(0.12, 1 - Math.max(0, i - idx) / (FOG_SECTIONS + 1));
@@ -140,22 +142,22 @@ function draw(alpha) {
   // car: road heading + its own yaw relative to the road
   ctx.translate(car.x, car.y);
   ctx.rotate(road.th + yaw + Math.PI / 2);
-  ctx.fillStyle = st.finishTick >= 0 ? "#43e0c9" : st.slide ? "#ffb13f" : "#d9ff3f";
+  ctx.fillStyle = st.finishTick >= 0 ? "#37e08c" : st.slide ? "#ff4d5e" : "#d7ff3f";
   ctx.beginPath();
   ctx.moveTo(0, -2200); ctx.lineTo(CAR_HALF_WIDTH, 1700); ctx.lineTo(-CAR_HALF_WIDTH, 1700);
   ctx.closePath(); ctx.fill();
 
   if (st.finishTick >= 0) {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.fillStyle = "rgba(13,14,18,0.8)";
-    ctx.fillRect(w / 2 - 230, h / 2 - 70, 460, 140);
-    ctx.fillStyle = "#e8e8ee";
+    ctx.fillStyle = "rgba(13,13,15,0.88)";
+    const bw = Math.min(460, w - 24); ctx.fillRect(w / 2 - bw / 2, h / 2 - 70, bw, 140);
+    ctx.fillStyle = "#f4f4f2";
     ctx.textAlign = "center";
-    ctx.font = "20px ui-monospace, Consolas, monospace";
+    ctx.font = "600 20px 'Space Grotesk', system-ui, sans-serif";
     ctx.fillText(`finished ${((st.finishTick * TICK_MS) / 1000).toFixed(2)}s · walls ${st.wallHits}`, w / 2, h / 2 - 20);
-    ctx.font = "13px ui-monospace, Consolas, monospace";
+    ctx.font = "13px 'JetBrains Mono', ui-monospace, monospace";
     ctx.fillText(verified ? `replay verified · state hash ${verified.toString(16).padStart(8, "0")}` : "verifying…", w / 2, h / 2 + 8);
-    ctx.fillText("press restart to go again", w / 2, h / 2 + 40);
+    ctx.fillText("Restart = same track · New track = random seed", w / 2, h / 2 + 40);
     ctx.textAlign = "start";
   }
 }
@@ -190,12 +192,12 @@ function frame(now) {
   const alpha = st.finishTick >= 0 ? 1 : acc / TICK_MS;
   setText("t", `${((st.tick * TICK_MS) / 1000).toFixed(1)}s`);
   setText("spd", `${Math.round((st.v * 3.6) / 1000)} km/h`);
-  setText("walls", `walls ${st.wallHits}`);
-  setText("best", best === null ? "" : `best ${best.toFixed(2)}s`);
+  setText("walls", String(st.wallHits));
+  setText("best", best === null ? "—" : `${best.toFixed(2)}s`);
   draw(alpha);
   requestAnimationFrame(frame);
 }
 
 resize();
-reset();
+randomSeed();
 requestAnimationFrame(frame);
