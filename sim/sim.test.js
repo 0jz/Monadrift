@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { generateTrack, SECTION_LEN, SECTIONS, HALF_WIDTH } from "./track.js";
 import {
-  createState, step, observe, encodeInput, decodeInput, runReplay, stateHash, safeSpeed, V_MAX,
+  createState, step, observe, encodeInput, decodeInput, runReplay, stateHash, safeSpeed, V_MAX, CAR_HALF_WIDTH, roadCurv, lockCurv, STEER_RATE,
 } from "./sim.js";
 import { drive } from "./bot.js";
 
@@ -71,7 +71,7 @@ test("flat-out throttle with no steering is punished: walls and a slow lap", () 
   const track = generateTrack(7);
   const naive = lap(track, () => ({ steer: 0, throttle: 1, brake: 0 }));
   const smart = lap(track, drive);
-  assert.ok(naive.st.wallHits > 5, `naive wall hits ${naive.st.wallHits}`);
+  assert.ok(naive.st.wallHits >= 1, `naive wall hits ${naive.st.wallHits}`);
   assert.ok(smart.st.finishTick >= 0);
   assert.ok(naive.st.finishTick < 0 || naive.st.finishTick > smart.st.finishTick);
 });
@@ -91,7 +91,6 @@ test("the inside of a bend is the shorter way: same speed, more progress", () =>
     const st = createState();
     st.s = 5 * SECTION_LEN; st.v = 30000; st.d = d;
     const before = st.s;
-    // freeze lateral movement effects by measuring a single tick's progress
     step(st, track, { steer: 0, throttle: 0, brake: 0 });
     return st.s - before;
   };
@@ -101,9 +100,10 @@ test("the inside of a bend is the shorter way: same speed, more progress", () =>
 test("walls clamp the car, cost speed and count a hit", () => {
   const track = { curv: new Int8Array(SECTIONS), boost: new Uint8Array(SECTIONS) }; // dead straight
   const st = createState();
-  st.s = 10 * SECTION_LEN; st.v = 50000; st.d = HALF_WIDTH - 10; st.lv = 500;
+  st.s = 10 * SECTION_LEN; st.v = 50000; st.d = HALF_WIDTH - CAR_HALF_WIDTH - 10; st.h = 300000; // ~17° into the right wall
   step(st, track, { steer: 1, throttle: 1, brake: 0 });
-  assert.equal(st.d, HALF_WIDTH);
+  assert.equal(st.d, HALF_WIDTH - CAR_HALF_WIDTH);
+  assert.ok(st.h <= 0, "glances off, no longer pointing into the wall");
   assert.equal(st.wallHits, 1);
   assert.ok(st.v < 50000);
 });
@@ -122,4 +122,23 @@ test("safe speed falls with curvature and never exceeds top speed", () => {
   assert.ok(safeSpeed(4) < safeSpeed(1));
 });
 
-const GOLDEN = { finishTick: 505, hash: 1425463607 };
+const GOLDEN = { finishTick: 1292, hash: 4038725972 };
+
+test("over-driving a bend slides wide and scrubs speed; a sane speed holds the line", () => {
+  const track = { curv: new Int8Array(SECTIONS).fill(4), boost: new Uint8Array(SECTIONS) };
+  const run = (v0) => {
+    const st = createState();
+    st.s = 5 * SECTION_LEN; st.v = v0;
+    let slid = 0;
+    for (let i = 0; i < 20; i++) {
+      // hold the wheel exactly where the road's curvature needs it (capped at full lock)
+      st.sa = Math.min(1000, Math.round((roadCurv(4) / lockCurv(st.v)) * 1000)) - STEER_RATE;
+      step(st, track, { steer: 1, throttle: 0, brake: 0 });
+      slid += st.slide;
+    }
+    return { st, slid };
+  };
+  const fast = run(safeSpeed(4) + 15000), sane = run(safeSpeed(4) - 3000);
+  assert.ok(fast.slid > 0 && sane.slid === 0, `fast slid ${fast.slid}, sane slid ${sane.slid}`);
+  assert.ok(fast.st.d < sane.st.d - 1000, "the fast car runs wide (left, in a right-hander)");
+});
