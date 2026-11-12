@@ -136,6 +136,7 @@ export function reconnect() {
 }
 
 const inflight = new Map(); // playerId -> Promise<Wallet> (dedupes concurrent first calls)
+const FRESH_WALLET_SETTLE_MS = 3000;
 
 export function getOrCreateSession(playerId) {
   const cached = sessions.get(playerId);
@@ -163,6 +164,12 @@ export function getOrCreateSession(playerId) {
           if (bal >= amount) break;
           await new Promise((r) => setTimeout(r, 400));
         }
+        // The RPC txpool lags behind getBalance: a tx sent within ~1-2s of
+        // funding is rejected "Signer had insufficient balance", and that stale
+        // balance stays cached as long as retries keep hitting it (2s retries
+        // were still rejected after 3 min). Measured 2026-11-12: waiting 3s
+        // before the first send succeeds on the first try.
+        await new Promise((r) => setTimeout(r, FRESH_WALLET_SETTLE_MS));
       }
     }
     // Cache only after funding succeeded, so a failed attempt is retried
@@ -216,7 +223,10 @@ async function sendTxNow(fn, { retries = 6, delayMs = 1200, retryReverts = 0 } =
         throw err;
       }
       if (attempt === 2) reconnect(); // a few same-connection retries first, then assume it's stuck
-      if (attempt < retries - 1) await new Promise((r) => setTimeout(r, delayMs));
+      // A stale "insufficient balance" in the txpool only clears once retries
+      // pause for a few seconds; fast retries keep it cached (see getOrCreateSession).
+      const staleBalance = /insufficient balance/i.test(err?.error?.message || err?.message || "");
+      if (attempt < retries - 1) await new Promise((r) => setTimeout(r, staleBalance ? 6000 : delayMs));
     }
   }
   throw lastErr;
