@@ -93,4 +93,18 @@ contract MonadriftTest is Test {
         m.chooseLane(raceId, l11);
         assertFalse(m.getPlayer(raceId, b).respawned, "flag cleared after moving");
     }
+
+    /// Regression: a player parked on a forced-lane (TURN/OBSTACLE) segment,
+    /// e.g. out of MON, must not wreck everyone who must take that same lane.
+    /// Seed 2, segment 6 is an OBSTACLE (segments 4-5 are STRAIGHT).
+    function test_parkedPlayerOnForcedLaneDoesNotBlock() public {
+        _start(2);
+        for (uint256 i = 0; i < 6; i++) _step(a, Monadrift.Lane.FAR_LEFT); // A parks at 6
+        for (uint256 i = 0; i < 5; i++) _step(b, Monadrift.Lane.FAR_LEFT);
+        assertEq(m.getPlayer(raceId, a).position, 6);
+        _step(b, Monadrift.Lane.FAR_LEFT); // B takes the same forced lane
+        Monadrift.Player memory pb = m.getPlayer(raceId, b);
+        assertEq(pb.position, 6, "passed through without collision");
+        assertEq(pb.hp, 3);
+    }
 }
