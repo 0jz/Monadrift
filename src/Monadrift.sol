@@ -194,8 +194,9 @@ contract Monadrift {
         require(nextSeg <= SEGMENTS_TOTAL, "already finished");
 
         bool inGracePeriod = nextSeg <= GRACE_SEGMENTS;
+        SegmentType segType = segmentAt(r.seed, nextSeg);
 
-        if (!inGracePeriod) {
+        if (!inGracePeriod && segType != SegmentType.TURN && segType != SegmentType.OBSTACLE) {
             // Collision = someone else is, RIGHT NOW, sitting at the exact
             // segment+lane you're moving into — not "someone passed through
             // here at some point earlier in the race." A permanent
@@ -207,6 +208,15 @@ contract Monadrift {
             // (bounced back to their checkpoint forever). Scanning current
             // live state instead means only an actual, still-present
             // occupant can trigger a collision.
+            //
+            // The scan is skipped on TURN/OBSTACLE segments: the lane is
+            // forced there, so a collision with an occupant is unavoidable.
+            // A player who stops moving (e.g. their session wallet ran out
+            // of MON) stays parked forever, so on a forced segment they'd
+            // wreck every later racer back to their checkpoint — the same
+            // permanent soft-lock — and an unavoidable hit isn't a skill
+            // decision anyway. On STRAIGHT/BOOST the mover can pick another
+            // lane, so a parked player there is avoidable and still collides.
             address[] storage addrs = r.playerAddrs;
             for (uint256 i = 0; i < addrs.length; i++) {
                 address other = addrs[i];
@@ -221,7 +231,6 @@ contract Monadrift {
             }
         }
 
-        SegmentType segType = segmentAt(r.seed, nextSeg);
         bool wrongLane = false;
         if (segType == SegmentType.TURN || segType == SegmentType.OBSTACLE) {
             wrongLane = (lane != correctLaneAt(r.seed, nextSeg));
