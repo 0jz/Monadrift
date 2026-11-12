@@ -1,0 +1,5 @@
+# Replace with your hostname (DuckDNS, or <vm-ip-with-dashes>.sslip.io).
+# Caddy fetches the TLS cert and proxies WebSockets automatically.
+yourname.duckdns.org {
+	reverse_proxy localhost:8787
+}
