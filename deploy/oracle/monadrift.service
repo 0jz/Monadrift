@@ -1,0 +1,16 @@
+[Unit]
+Description=Monadrift backend
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# dotenv reads backend/.env from this directory
+WorkingDirectory=/home/ubuntu/Monadrift/backend
+ExecStart=/usr/bin/node src/index.js
+Restart=always
+RestartSec=3
+User=ubuntu
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target

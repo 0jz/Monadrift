@@ -31,38 +31,37 @@ The free plan sleeps when idle; lobbies are held in memory and are lost on sleep
 
 ## Option B: Oracle Cloud Always Free VM (always on)
 
-On an Ubuntu VM (Ampere A1 or E2.1.Micro), with ports 80 and 443 open in both the
-VCN security list and the instance firewall:
+Needs a card for sign-up verification (Always Free resources are not charged).
+Ampere A1 often reports "out of host capacity" in busy regions; the
+E2.1.Micro shape is plenty for this backend.
+
+1. Create an Ubuntu 24.04 instance. In the VCN security list, add ingress rules
+   for TCP 80 and 443 from `0.0.0.0/0`.
+2. Point a free hostname at the VM's public IP (DuckDNS `yourname.duckdns.org`,
+   or no-signup `<ip-with-dashes>.sslip.io`).
+3. On the VM:
 
 ```bash
-sudo apt update && sudo apt install -y git curl debian-keyring caddy
+sudo apt update && sudo apt install -y git curl caddy
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - && sudo apt install -y nodejs
 git clone https://github.com/0jz/Monadrift.git && cd Monadrift/backend && npm ci
-cp .env.example .env   # fill CONTRACT_ADDRESS, FUNDER_PRIVATE_KEY, SESSION_SEED; RPC_URL=https://testnet-rpc.monad.xyz
+cp .env.example .env && chmod 600 .env   # fill CONTRACT_ADDRESS, FUNDER_PRIVATE_KEY, SESSION_SEED (same seed as before)
+
+# Oracle's Ubuntu image blocks everything but SSH in iptables, on top of the security list
+sudo iptables -I INPUT 6 -p tcp -m multiport --dports 80,443 -j ACCEPT
+sudo netfilter-persistent save
+
+sudo cp ../deploy/oracle/monadrift.service /etc/systemd/system/
+sudo cp ../deploy/oracle/Caddyfile /etc/caddy/Caddyfile   # then edit the hostname
+sudo systemctl daemon-reload && sudo systemctl enable --now monadrift && sudo systemctl restart caddy
 ```
 
-systemd unit `/etc/systemd/system/monadrift.service`:
+4. Check `https://<hostname>/health`, then set `REMOTE_BACKEND` in
+   `frontend/shared.js` to `https://<hostname>` and redeploy Vercel.
 
-```ini
-[Unit]
-Description=Monadrift backend
-After=network-online.target
-[Service]
-WorkingDirectory=/home/ubuntu/Monadrift/backend
-ExecStart=/usr/bin/node src/index.js
-Restart=always
-User=ubuntu
-[Install]
-WantedBy=multi-user.target
-```
+Update later with `git pull && (cd backend && npm ci) && sudo systemctl restart monadrift`.
+Logs: `journalctl -u monadrift -f`.
 
-HTTPS with a free hostname (e.g. DuckDNS `yourname.duckdns.org` pointing at the VM IP), in `/etc/caddy/Caddyfile`:
-
-```
-yourname.duckdns.org {
-  reverse_proxy localhost:8787
-}
-```
-
-Then `sudo systemctl enable --now monadrift caddy`. Caddy gets the certificate
-automatically and proxies WebSockets.
+Oracle may reclaim Always Free instances that stay nearly idle for 7 days.
+Upgrading the account to Pay-As-You-Go (still free for Always Free shapes)
+stops that.
