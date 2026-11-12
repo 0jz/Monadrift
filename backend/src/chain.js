@@ -181,6 +181,38 @@ export function getOrCreateSession(playerId) {
   return p;
 }
 
+// Mid-race top-up. Monad bills the full gasLimit: a move is ~0.0095 MON, the
+// finishing move ~0.016, and a 60-segment race with wrong-lane guesses needs
+// ~0.6+ MON, but getOrCreateSession funds only once (0.3), so players ran dry
+// around segment 30. Called fire-and-forget after each successful move.
+const topUpInflight = new Map(); // address -> Promise (one top-up per wallet at a time)
+const topUpCounts = new Map(); // playerId -> top-ups sent
+// ponytail: in-memory abuse ceiling, resets on restart; persist if it matters
+const MAX_TOPUPS_PER_PLAYER = 3;
+
+export function topUpIfLow(playerId, wallet) {
+  if (!funder) return Promise.resolve();
+  if (topUpInflight.has(wallet.address)) return topUpInflight.get(wallet.address);
+  const p = (async () => {
+    const amount = ethers.parseEther(SESSION_FUND_AMOUNT);
+    const bal = await retryRpc(() => provider.getBalance(wallet.address));
+    if (bal >= amount / 3n) return;
+    const used = topUpCounts.get(playerId) || 0;
+    if (used >= MAX_TOPUPS_PER_PLAYER) {
+      console.warn(`top-up cap reached for ${playerId}, skipping`);
+      return;
+    }
+    topUpCounts.set(playerId, used + 1);
+    // Plain EOA-to-EOA transfer, so 21000 gas is exact (and cheapest).
+    await sendTx(
+      () => funder.sendTransaction({ to: wallet.address, value: amount, ...TX_OVERRIDES, gasLimit: 21000n }),
+      { key: funder.address, retryReverts: 3 }
+    );
+  })().finally(() => topUpInflight.delete(wallet.address));
+  topUpInflight.set(wallet.address, p);
+  return p;
+}
+
 export function contractFor(wallet) {
   return contractAs(wallet);
 }
