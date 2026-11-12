@@ -36,7 +36,7 @@ async function main() {
   // wait for RUNNING (phase 2)
   let state;
   do {
-    await sleep(500);
+    await sleep(2000);
     state = await api(`/race/${raceId}/state`);
   } while (state.phase !== 2);
 

@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
 import QRCode from "qrcode";
 import crypto from "node:crypto";
-import { readContract, getOrCreateSession, contractFor, provider, funder, TX_OVERRIDES, sendTx, retryRpc } from "./chain.js";
+import { readContract, getOrCreateSession, contractFor, provider, funder, TX_OVERRIDES, sendTx, retryRpc, topUpIfLow } from "./chain.js";
 
 // A single unexpected RPC error (rate limit, transient network blip, an
 // ethers internal poll rejecting outside the normal call chain) previously
@@ -63,7 +63,18 @@ const generalLimiter = rateLimit({
 });
 app.use("/session", generalLimiter);
 app.use("/lobby", generalLimiter);
-app.use("/race", generalLimiter);
+// /race gets a higher cap: a human racing sends a segment fetch + a move per
+// segment (~120+ requests per 60-segment race in 1-2 min) plus state polls,
+// which tripped the 60/min limit mid-race. /session and /lobby stay at 60;
+// registerLimiter (wallet funding) is unchanged.
+const raceLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 240,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Rate limit exceeded — slow down." },
+});
+app.use("/race", raceLimiter);
 
 // mode -> open raceId waiting for players (in-memory matchmaking; the
 // contract itself doesn't track "open" lobbies, this is just routing)
@@ -342,6 +353,8 @@ app.post("/race/:id/move", async (req, res) => {
 
     const p = await retryRpc(() => readContract.getPlayer(raceId, wallet.address));
     lastPositions.set(`${raceId}:${wallet.address}`, Number(p.position));
+    // Not awaited: the top-up must not delay the move response.
+    topUpIfLow(playerId, wallet).catch((err) => console.error("top-up failed:", err.message));
     const payload = {
       type: "move",
       playerId,
